@@ -1,23 +1,42 @@
 name: Build dylib
-on: [push, workflow_dispatch]
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: macos-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Clone fishhook
+        run: git clone --depth 1 https://github.com/facebook/fishhook.git
+
+      - name: Compile and Link dylib
         run: |
-          git clone --depth 1 https://github.com/facebook/fishhook.git
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          F="-arch arm64 -O2 -isysroot $SDK -miphoneos-version-min=14.0 -I fishhook"
-          clang -c $F DiscordEcho.c -o echo.o
-          clang -c $F -fobjc-arc DiscordEchoUI.m -o ui.o
-          clang -c $F fishhook/fishhook.c -o fishhook.o
+          FLAGS="-arch arm64 -O2 -isysroot $SDK -miphoneos-version-min=14.0 -I fishhook"
+          
+          clang -c $FLAGS DiscordEcho.c -o echo.o
+          clang -c $FLAGS -fobjc-arc DiscordEchoUI.m -o ui.o
+          clang -c $FLAGS fishhook/fishhook.c -o fishhook.o
+          
           clang -dynamiclib -arch arm64 -isysroot $SDK -miphoneos-version-min=14.0 \
-            -framework Foundation -framework UIKit -framework AudioToolbox -framework CoreGraphics -framework AVFoundation \
+            -framework Foundation \
+            -framework UIKit \
+            -framework AudioToolbox \
+            -framework CoreGraphics \
+            -framework AVFoundation \
             echo.o ui.o fishhook.o -o libdiscordecho.dylib
+            
           codesign -f -s - libdiscordecho.dylib
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload dylib artifact
+        uses: actions/upload-artifact@v4
         with:
           name: libdiscordecho
           path: libdiscordecho.dylib
