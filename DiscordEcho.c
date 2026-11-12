@@ -62,7 +62,7 @@ static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356};
 static const int kApBase[RV_APS] = {556, 441};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    // توليد عشوائية "الوسوسة" الخفيفة بكسر تكرار الصدى الصريح
+    // توليد ضوضاء "الوسوسة" العشوائية لكسر تكرار الصدى الميكانيكي
     float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.015f;
     float in = (x + noise) * 0.04f;
     
