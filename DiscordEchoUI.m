@@ -361,6 +361,13 @@ static NSString *EchoTime(float s) {
     [self addToggleTo:tabMusic title:@"🔁 تكرار التشغيل" x:14 y:234 width:w on:mloop != 0 action:@selector(loopToggled:)];
     [self addToggleTo:tabMusic title:@"🔇 كتم المايك مع الأغنية" x:14 y:270 width:w on:mute != 0 action:@selector(muteToggled:)];
 
+    [self updateEchoLabel:level];
+    [self updateBoostLabel:boost];
+    [self updateRangeLabel:range];
+    [self updatePitchLabel];
+    [self updateGainLabel:gain];
+    [self updateVolLabel:mvol];
+
     DiscordEcho_SetLevel(level);
     DiscordEcho_SetEchoBoost(boost);
     DiscordEcho_SetRange(range);
