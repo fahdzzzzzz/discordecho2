@@ -247,4 +247,59 @@ static NSString *EchoTime(float s) {
     [fab setTitle:@"🎛️" forState:UIControlStateNormal];
     fab.titleLabel.font = [UIFont systemFontOfSize:22];
     [fab addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragFab:)];
+    [fab addGestureRecognizer:pan];
+    [self.view addSubview:fab];
+    self.fab = fab;
 
+    UIView *panel = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelW, kPanelH)];
+    panel.backgroundColor = [UIColor colorWithRed:0.88 green:0.90 blue:0.93 alpha:0.97];
+    panel.layer.cornerRadius = 14;
+    panel.layer.borderWidth = 1.5;
+    panel.layer.borderColor = [UIColor colorWithRed:0.68 green:0.71 blue:0.75 alpha:1.0].CGColor;
+    panel.hidden = YES;
+    [self.view addSubview:panel];
+    self.panel = panel;
+
+    UISegmentedControl *tabs = [[UISegmentedControl alloc] initWithItems:@[@"EAX صدى", @"🎙️ نبرة", @"🎚️ مضخّم", @"🎵 أغاني"]];
+    tabs.frame = CGRectMake(12, 10, kPanelW - 24, 34);
+    tabs.selectedSegmentIndex = 0;
+    tabs.selectedSegmentTintColor = [UIColor colorWithRed:0.18 green:0.50 blue:0.82 alpha:1.0];
+    NSDictionary *darkText = @{ NSForegroundColorAttributeName: [UIColor colorWithRed:0.1 green:0.1 blue:0.12 alpha:1.0] };
+    NSDictionary *whiteText = @{ NSForegroundColorAttributeName: UIColor.whiteColor };
+    [tabs setTitleTextAttributes:darkText forState:UIControlStateNormal];
+    [tabs setTitleTextAttributes:whiteText forState:UIControlStateSelected];
+    [tabs addTarget:self action:@selector(tabChanged:) forControlEvents:UIControlEventValueChanged];
+    [panel addSubview:tabs];
+    self.tabs = tabs;
+
+    CGRect cf = CGRectMake(0, kTabTop, kPanelW, kPanelH - kTabTop);
+    UIView *tabEcho = [[UIView alloc] initWithFrame:cf];
+    UIView *tabPitch = [[UIView alloc] initWithFrame:cf];
+    UIView *tabAmp = [[UIView alloc] initWithFrame:cf];
+    UIView *tabMusic = [[UIView alloc] initWithFrame:cf];
+    self.tabViews = @[tabEcho, tabPitch, tabAmp, tabMusic];
+    for (UIView *v in self.tabViews) { [panel addSubview:v]; v.hidden = (v != tabEcho); }
+
+    CGFloat w = kPanelW - 28;
+
+    [self addToggleTo:tabEcho title:@"✨ Creative EAX Cavern Mode" x:14 y:2 width:w on:eax != 0 action:@selector(eaxToggled:)];
+
+    self.echoLabel = [self makeLabelAt:CGRectMake(14, 38, w, 18) size:12 bold:YES alpha:0.95];
+    [tabEcho addSubview:self.echoLabel];
+    self.echoSlider = [self makeSliderAt:CGRectMake(14, 56, w, 22) min:0 max:100 value:level action:@selector(echoChanged:)];
+    [tabEcho addSubview:self.echoSlider];
+
+    self.boostLabel = [self makeLabelAt:CGRectMake(14, 80, w, 18) size:12 bold:YES alpha:0.95];
+    [tabEcho addSubview:self.boostLabel];
+    self.boostSlider = [self makeSliderAt:CGRectMake(14, 98, w, 22) min:100 max:300 value:boost action:@selector(boostChanged:)];
+    [tabEcho addSubview:self.boostSlider];
+
+    self.rangeLabel = [self makeLabelAt:CGRectMake(14, 122, w, 18) size:12 bold:YES alpha:0.95];
+    [tabEcho addSubview:self.rangeLabel];
+    self.rangeSlider = [self makeSliderAt:CGRectMake(14, 140, w, 22) min:0 max:100 value:range action:@selector(rangeChanged:)];
+    [tabEcho addSubview:self.rangeSlider];
+
+    self.wFreqLabel = [self makeLabelAt:CGRectMake(14, 164, w, 18) size:12 bold:YES alpha:0.95];
+    [tabEcho addSubview:self.wFreqLabel];
+    self.wFreqSlider = [self makeSliderAt:CGRectMake(14,
