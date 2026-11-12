@@ -1,84 +1,25 @@
-name: Build dylib
-
-on:
-  push:name: Build dylib
-
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Clone fishhook
-        run: git clone --depth 1 https://github.com/facebook/fishhook.git
-
-      - name: Compile and Link dylib
-        run: |
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          FLAGS="-arch arm64 -O2 -isysroot $SDK -miphoneos-version-min=14.0 -I fishhook"
-          
-          clang -c $FLAGS DiscordEcho.c -o echo.o
-          clang -c $FLAGS -fobjc-arc DiscordEchoUI.m -o ui.o
-          clang -c $FLAGS fishhook/fishhook.c -o fishhook.o
-          
-          clang -dynamiclib -arch arm64 -isysroot $SDK -miphoneos-version-min=14.0 \
-            -framework Foundation \
-            -framework UIKit \
-            -framework AudioToolbox \
-            -framework CoreGraphics \
-            -framework AVFoundation \
-            echo.o ui.o fishhook.o -o libdiscordecho.dylib
-            
-          codesign -f -s - libdiscordecho.dylib
-
-      - name: Upload dylib artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libdiscordecho
-          path: libdiscordecho.dylib
-
-    branches: [ main, master ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Clone fishhook
-        run: git clone --depth 1 https://github.com/facebook/fishhook.git
-
-      - name: Compile and Link dylib
-        run: |
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          FLAGS="-arch arm64 -O2 -isysroot $SDK -miphoneos-version-min=14.0 -I fishhook"
-          
-          clang -c $FLAGS DiscordEcho.c -o echo.o
-          clang -c $FLAGS -fobjc-arc DiscordEchoUI.m -o ui.o
-          clang -c $FLAGS fishhook/fishhook.c -o fishhook.o
-          
-          clang -dynamiclib -arch arm64 -isysroot $SDK -miphoneos-version-min=14.0 \
-            -framework Foundation \
-            -framework UIKit \
-            -framework AudioToolbox \
-            -framework CoreGraphics \
-            -framework AVFoundation \
-            echo.o ui.o fishhook.o -o libdiscordecho.dylib
-            
-          codesign -f -s - libdiscordecho.dylib
-
-      - name: Upload dylib artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libdiscordecho
-          path: libdiscordecho.dylib
+static void echo_setup_window(void) {
+    if (gWin) return;
+    UIWindowScene *targetScene = nil;
+    for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+        if ([s isKindOfClass:UIWindowScene.class] &&
+            s.activationState == UISceneActivationStateForegroundActive) {
+            targetScene = (UIWindowScene *)s;
+            break;
+        }
+    }
+    if (!targetScene) {
+        for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+            if ([s isKindOfClass:UIWindowScene.class]) {
+                targetScene = (UIWindowScene *)s;
+                break;
+            }
+        }
+    }
+    if (!targetScene) return;
+    gWin = [[EchoWindow alloc] initWithWindowScene:targetScene];
+    gWin.windowLevel = UIWindowLevelAlert + 100;
+    gWin.backgroundColor = UIColor.clearColor;
+    gWin.rootViewController = [EchoController new];
+    gWin.hidden = NO;
+}
