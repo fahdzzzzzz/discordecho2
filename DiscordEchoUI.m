@@ -246,4 +246,5 @@ static NSString *EchoTime(float s) {
     fab.layer.borderColor = [UIColor colorWithRed:0.55 green:0.58 blue:0.62 alpha:1.0].CGColor;
     [fab setTitle:@"🎛️" forState:UIControlStateNormal];
     fab.titleLabel.font = [UIFont systemFontOfSize:22];
-    [fab addTarget:
+    [fab addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
+
