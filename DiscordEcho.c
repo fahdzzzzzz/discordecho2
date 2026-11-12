@@ -1,4 +1,4 @@
-// 🎧 DiscordEcho: معالج الصوت مع تردد الهمس المستقل ومودات الكرت الفضي
+// 🎧 DiscordEcho: محاكي صدى Creative EAX (مستوحى من خوارزميات OpenAL / EAX Open Source)
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,9 +11,9 @@
 #define MUSIC_TMP 8192
 
 static volatile int   g_level = 60;
-static volatile int   g_boost = 150;
-static volatile int   g_range = 70;
-static volatile int   g_whisper_freq = 50; // تردد الهمس المستقل
+static volatile int   g_boost = 140;
+static volatile int   g_range = 65;
+static volatile int   g_whisper_freq = 45;
 static volatile int   g_eax_mode = 1;
 static volatile int   g_gain  = 100;
 static volatile int   g_pitch = 0;
@@ -22,11 +22,11 @@ static volatile int   g_voice_mute = 0;
 static volatile float g_peak  = 0.0f;
 
 void DiscordEcho_SetLevel(int v)  { g_level = v < 0 ? 0 : (v > 100 ? 100 : v); }
-void DiscordEcho_SetEchoBoost(int v) { g_boost = v < 100 ? 100 : (v > 400 ? 400 : v); }
+void DiscordEcho_SetEchoBoost(int v) { g_boost = v < 100 ? 100 : (v > 300 ? 300 : v); }
 void DiscordEcho_SetRange(int v)  { g_range = v < 0 ? 0 : (v > 100 ? 100 : v); }
 void DiscordEcho_SetWhisperFreq(int v) { g_whisper_freq = v < 0 ? 0 : (v > 100 ? 100 : v); }
 void DiscordEcho_SetEAXMode(int on) { g_eax_mode = on ? 1 : 0; }
-void DiscordEcho_SetGain(int v)   { g_gain = v < 100 ? 100 : (v > 800 ? 800 : v); }
+void DiscordEcho_SetGain(int v)   { g_gain = v < 100 ? 100 : (v > 500 ? 500 : v); }
 void DiscordEcho_SetPitch(int v)  { g_pitch = v < -12 ? -12 : (v > 12 ? 12 : v); }
 void DiscordEcho_SetRobot(int on) { g_robot = on ? 1 : 0; }
 void DiscordEcho_SetVoiceMute(int on) { g_voice_mute = on ? 1 : 0; }
@@ -34,17 +34,18 @@ float DiscordEcho_GetPeak(void)   { return g_peak; }
 
 static float soft_limit(float y) {
     float a = y < 0 ? -y : y;
-    if (a <= 0.6f) return y;
-    float s = 0.6f + 0.4f * tanhf((a - 0.6f) / 0.4f);
+    if (a <= 0.75f) return y;
+    float s = 0.75f + 0.25f * tanhf((a - 0.75f) / 0.25f);
     return y < 0 ? -s : s;
 }
 
+// 🎛️ هيكل فلاتر EAX الحقيقية (EAX Reverb Comb/All-pass Architecture)
 #define RV_COMBS    4
 #define RV_APS      2
-#define RV_COMB_MAX 14336
-#define RV_AP_MAX   4096
-#define RV_DAMP     0.20f
-#define RV_WET      4.0f
+#define RV_COMB_MAX 4096  // حجم مثالي لمنع التأخير (Latency) والصوت المكتوم
+#define RV_AP_MAX   1024
+#define RV_DAMP     0.35f  // تخميد متوازن لنقاء الصوت
+#define RV_WET      1.6f   // معامل الوسوسة والصدى الواضح
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -55,14 +56,14 @@ typedef struct {
 } Reverb;
 
 static Reverb g_rv[MAX_BUFS];
-static const int kCombBase[RV_COMBS] = {2203, 2609, 3011, 3407};
-static const int kApBase[RV_APS] = {1013, 1511};
+// أطوال مرجعية مقتبسة من مكتبات EAX الشهيرة لكرت كريتف
+static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356};
+static const int kApBase[RV_APS] = {556, 441};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen, float w_freq) {
-    // 🌬️ وسوسة عشوائية تتأثر بتردد الهمس المستقل لزيادة الوضوح والانتشار
-    float noise_scale = 0.05f + (w_freq / 100.0f) * 0.12f;
+    float noise_scale = 0.015f + (w_freq / 100.0f) * 0.04f;
     float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * noise_scale;
-    float in = (x + noise) * 0.15f;
+    float in = x + noise;
     
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
@@ -250,9 +251,13 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     if (rate < 8000.0f) rate = 48000.0f;
 
     float r = (float)g_range / 100.0f;
-    float cave_fb   = 0.86f + 0.13f * r;
-    float cave_size = 1.5f + 1.8f * r;
-    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f) * 1.5f;
+    float cave_fb   = 0.60f + 0.22f * r; 
+    float cave_size = 0.9f + 0.9f * r;
+    
+    // معادلة المزج المباشر (Dry/Wet Balance) لضمان عدم كتم الصوت حتى عند رفعه للفل
+    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f) * 0.95f;
+    float dry_gain  = 1.0f - (wet_gain * 0.35f); 
+    if (dry_gain < 0.4f) dry_gain = 0.4f;
 
     float gain = (float)gn / 100.0f;
     float ratio = powf(2.0f, (float)semis / 12.0f);
@@ -287,7 +292,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
         if (echo_on) {
             float wet = rv_process(rv, y, cave_fb, clen, alen, (float)w_freq) * RV_WET;
-            y = y + wet * wet_gain;
+            y = (y * dry_gain) + (wet * wet_gain);
         }
 
         y = soft_limit(y * gain);
