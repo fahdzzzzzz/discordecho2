@@ -1,8 +1,9 @@
-// 🎛️ DiscordEcho.c - محرك معالجة صدى Creative EAX المتقدم
+// 🎛️ DiscordEcho.c - محرك معالجة صدى Creative EAX النقي
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 
 #define SAMPLE_RATE 48000
 #define MAX_BUFFER_SAMPLES (SAMPLE_RATE * 60 * 8)
@@ -19,7 +20,6 @@ static int g_voice_mute = 0;
 
 static float g_peak_meter = 0.0f;
 
-// 🎚️ مصفوفة فلاتر Comb متعددة لتغطية مختلف تأثيرات الصدى والكهف
 #define COMB_COUNT 6
 static float *g_comb_buffers[COMB_COUNT];
 static int g_comb_sizes[COMB_COUNT] = { 1116, 1356, 1422, 1617, 1848, 2053 };
@@ -93,17 +93,19 @@ float DiscordEcho_MusicDuration(void) {
     return (float)g_music_length / (float)SAMPLE_RATE;
 }
 
-void DiscordEcho_ProcessAudio(float *buffer, UInt32 frameCount, UInt32 channels) {
+// معالجة الصوت بالأنواع القياسية لضمان نجاح البناء وعدم كتم الصوت عند الدرجة 100
+void DiscordEcho_ProcessAudio(float *buffer, uint32_t frameCount, uint32_t channels) {
     DiscordEcho_InitBuffers();
     
     float max_val = 0.0f;
     float gain_mult = (float)g_gain / 100.0f;
     float music_vol = (float)g_music_volume / 100.0f;
-    float eax_mix = (float)g_level / 100.0f; // من 0 إلى 1.0
+    float eax_mix = (float)g_level / 100.0f;
     float feedback = 0.65f * ((float)g_boost / 200.0f);
     float room_scale = (float)g_range / 100.0f;
 
-    for (UInt32 i = 0; i < frameCount; i++) {
+    uint32_t i, c;
+    for (i = 0; i < frameCount; i++) {
         float sample = buffer[i * channels];
 
         if (g_voice_mute) {
@@ -112,7 +114,6 @@ void DiscordEcho_ProcessAudio(float *buffer, UInt32 frameCount, UInt32 channels)
             sample *= gain_mult;
         }
 
-        // دمج تشغيل الأغاني إن وجد
         if (g_music_playing && g_music_buffer && g_music_position < g_music_length) {
             float m_sample = g_music_buffer[g_music_position++] * music_vol;
             sample += m_sample;
@@ -122,26 +123,27 @@ void DiscordEcho_ProcessAudio(float *buffer, UInt32 frameCount, UInt32 channels)
             }
         }
 
-        float clean_signal = sample; // الاحتفاظ بالإشارة الأصلية لضمان عدم كتم الصوت
+        float clean_signal = sample;
 
-        // معالجة الصدى بنظام EAX
         if (g_eax_mode && eax_mix > 0.0f) {
             float reverb_out = 0.0f;
             
-            for (int c = 0; c < COMB_COUNT; c++) {
-                int adjusted_size = (int)((float)g_comb_sizes[c] * (0.5f + room_scale * 0.5f));
-                int idx = g_comb_indices[c];
+            int j;
+            for (j = 0; j < COMB_COUNT; j++) {
+                int adjusted_size = (int)((float)g_comb_sizes[j] * (0.5f + room_scale * 0.5f));
+                int idx = g_comb_indices[j];
                 if (idx >= adjusted_size) idx = 0;
                 
-                float delayed = g_comb_buffers[c][idx];
+                float delayed = g_comb_buffers[j][idx];
                 float output = sample + (delayed * feedback);
-                g_comb_buffers[c][idx] = output;
-                g_comb_indices[c] = (idx + 1) % adjusted_size;
+                g_comb_buffers[j][idx] = output;
+                g_comb_indices[j] = (idx + 1) % adjusted_size;
                 reverb_out += delayed;
             }
 
             float ap_in = reverb_out * 0.45f;
-            for (int ap = 0; ap < AP_COUNT; ap++) {
+            int ap;
+            for (ap = 0; ap < AP_COUNT; ap++) {
                 int idx = g_ap_indices[ap];
                 float delayed = g_ap_buffers[ap][idx];
                 float output = ap_in + (delayed * 0.5f);
@@ -150,18 +152,16 @@ void DiscordEcho_ProcessAudio(float *buffer, UInt32 frameCount, UInt32 channels)
                 ap_in = delayed - (output * 0.5f);
             }
 
-            // مزج ذكي يحافظ على وضوح وقوة الصوت الأصلي مهما بلغت قيمة الصدى
             sample = (clean_signal * 0.7f) + (ap_in * eax_mix * 0.5f);
         }
 
-        // مانع التشويش (Soft-Limiter)
         if (sample > 0.98f) sample = 0.98f;
         if (sample < -0.98f) sample = -0.98f;
 
         float abs_s = fabsf(sample);
         if (abs_s > max_val) max_val = abs_s;
 
-        for (UInt32 c = 0; c < channels; c++) {
+        for (c = 0; c < channels; c++) {
             buffer[i * channels + c] = sample;
         }
     }
