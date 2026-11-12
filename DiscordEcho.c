@@ -1,4 +1,4 @@
-// DiscordEcho: معالج صوت المايك (نسخة EAX سريعة بدون تأخير)
+// DiscordEcho: معالج صوت المايك (نسخة EAX سريعة وخالية من الأخطاء)
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -8,13 +8,13 @@
 
 #define MAX_RATE 48000
 #define MAX_BUFS 2
-#define LINE_LEN (MAX_RATE * 1) // تقصير مساحة الخط لإنهاء أي تأخير (Latency)
+#define LINE_LEN (MAX_RATE * 1)
 #define MUSIC_TMP 8192
 
 static volatile int   g_level = 60;
 static volatile int   g_boost = 150;
 static volatile int   g_range = 70;
-static volatile int   g_eax_mode = 1; // زر موحد للصدى والتكرار معاً
+static volatile int   g_eax_mode = 1;
 static volatile int   g_gain  = 100;
 static volatile int   g_pitch = 0;
 static volatile int   g_robot = 0;
@@ -278,7 +278,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
     float r = (float)g_range / 100.0f;
     float rep_fb    = 0.40f + 0.35f * r;
-    float rep_delay = 0.15f + 0.15f * r; // تقصير مسافة التأخير لتتطابق فورياً
+    float rep_delay = 0.15f + 0.15f * r;
     float cave_fb   = 0.80f + 0.10f * r;
     float cave_size = 1.2f + 0.6f * r;
     float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
@@ -303,4 +303,86 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
         clen[c] = L < 1 ? 1 : (L >= RV_COMB_MAX ? RV_COMB_MAX - 1 : L);
     }
     for (int a = 0; a < RV_APS; a++) {
-        int L = (int)((float)kApBase
+        int L = (int)((float)kApBase[a] * rs) * (int)chans;
+        alen[a] = L < 1 ? 1 : (L >= RV_AP_MAX ? RV_AP_MAX - 1 : L);
+    }
+
+    float pk = 0.0f;
+    UInt32 ch = 0;
+    size_t fi = 0;
+    for (size_t i = 0; i < n; i++) {
+        float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
+        float y = mute ? 0.0f : x;
+
+        if (ps_on) y = ps_process(ps, y, ratio);
+
+        if (robot_on) {
+            y *= 1.4f * sinf(g_robot_phase);
+            g_robot_phase += rstep;
+            if (g_robot_phase > 6.2831853f) g_robot_phase -= 6.2831853f;
+        }
+
+        if (echo_on) {
+            float wet = 0.0f;
+            float rin = y;
+            float d = line[p];
+            line[p] = y + rep_fb * d;
+            wet += d * 1.2f;
+            rin = y + 0.5f * d;
+            if (++p >= D) p = 0;
+
+            wet += rv_process(rv, rin, cave_fb, clen, alen) * RV_WET;
+            y = y + wet * wet_gain;
+        }
+
+        y = soft_limit(y * gain);
+
+        float a = y < 0 ? -y : y;
+        if (a > pk) pk = a;
+
+        if (mus && fi < mus_frames) y = soft_limit(y + mus[fi]);
+
+        if (is_float) ((float *)ab->mData)[i] = y;
+        else          ((int16_t *)ab->mData)[i] = (int16_t)(y * 32767.0f);
+
+        if (++ch >= chans) { ch = 0; fi++; }
+    }
+    if (echo_on) g_pos[idx] = p;
+    update_peak(pk);
+}
+
+static OSStatus my_render(AudioUnit unit, AudioUnitRenderActionFlags *flags,
+                          const AudioTimeStamp *ts, UInt32 bus,
+                          UInt32 frames, AudioBufferList *io) {
+    OSStatus st = orig_render(unit, flags, ts, bus, frames, io);
+    if (st != noErr || bus != 1 || io == NULL) return st;
+
+    if (unit != g_unit || !g_have_fmt) {
+        UInt32 sz = sizeof(g_fmt);
+        if (AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat,
+                                 kAudioUnitScope_Output, 1, &g_fmt, &sz) == noErr) {
+            g_unit = unit;
+            g_have_fmt = 1;
+        } else {
+            g_have_fmt = 0;
+            return st;
+        }
+    }
+
+    int mus_on = music_generate(g_mtmp, frames, (float)g_fmt.mSampleRate);
+    for (UInt32 b = 0; b < io->mNumberBuffers && b < MAX_BUFS; b++) {
+        if (io->mBuffers[b].mData)
+            process_buffer((int)b, &io->mBuffers[b], mus_on ? g_mtmp : NULL, frames);
+    }
+    return st;
+}
+
+__attribute__((constructor))
+static void init(void) {
+    for (int i = 0; i <= 1024; i++) {
+        float s = sinf(3.14159265f * (float)i / 1024.0f);
+        g_win[i] = s * s;
+    }
+    struct rebinding r = { "AudioUnitRender", (void *)my_render, (void **)&orig_render };
+    rebind_symbols(&r, 1);
+}
