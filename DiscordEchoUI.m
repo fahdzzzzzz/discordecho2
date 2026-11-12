@@ -588,14 +588,14 @@ static void echo_setup_window(void) {
     for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
         if ([s isKindOfClass:UIWindowScene.class] &&
             s.activationState == UISceneActivationStateForegroundActive) {
-            targetScene = (UIScene *)s;
+            targetScene = (UIWindowScene *)s;
             break;
         }
     }
     if (!targetScene) {
         for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
             if ([s isKindOfClass:UIWindowScene.class]) {
-                targetScene = (UIScene *)s;
+                targetScene = (UIWindowScene *)s;
                 break;
             }
         }
