@@ -1,4 +1,4 @@
-// 🎧 DiscordEcho: معالج الصوت وتأثير الوسوسة العشوائية مع صدى EAX 3D
+// 🎧 DiscordEcho: معالج الصوت، الوسوسة الطويلة العشوائية، ومراقبة الصوت (Sidetone)
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -8,7 +8,6 @@
 
 #define MAX_RATE 48000
 #define MAX_BUFS 2
-#define LINE_LEN (MAX_RATE * 1)
 #define MUSIC_TMP 8192
 
 static volatile int   g_level = 60;
@@ -19,6 +18,7 @@ static volatile int   g_gain  = 100;
 static volatile int   g_pitch = 0;
 static volatile int   g_robot = 0;
 static volatile int   g_voice_mute = 0;
+static volatile int   g_sidetone = 0;
 static volatile float g_peak  = 0.0f;
 
 void DiscordEcho_SetLevel(int v)  { g_level = v < 0 ? 0 : (v > 100 ? 100 : v); }
@@ -29,6 +29,7 @@ void DiscordEcho_SetGain(int v)   { g_gain = v < 100 ? 100 : (v > 800 ? 800 : v)
 void DiscordEcho_SetPitch(int v)  { g_pitch = v < -12 ? -12 : (v > 12 ? 12 : v); }
 void DiscordEcho_SetRobot(int on) { g_robot = on ? 1 : 0; }
 void DiscordEcho_SetVoiceMute(int on) { g_voice_mute = on ? 1 : 0; }
+void DiscordEcho_SetSidetone(int on) { g_sidetone = on ? 1 : 0; }
 float DiscordEcho_GetPeak(void)   { return g_peak; }
 
 static float soft_limit(float y) {
@@ -38,16 +39,12 @@ static float soft_limit(float y) {
     return y < 0 ? -s : s;
 }
 
-static float g_line[MAX_BUFS][LINE_LEN];
-static size_t g_pos[MAX_BUFS];
-static int g_cleared[MAX_BUFS];
-
 #define RV_COMBS    4
 #define RV_APS      2
-#define RV_COMB_MAX 4096
-#define RV_AP_MAX   1024
-#define RV_DAMP     0.50f
-#define RV_WET      1.6f
+#define RV_COMB_MAX 8192
+#define RV_AP_MAX   2048
+#define RV_DAMP     0.35f
+#define RV_WET      2.2f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -58,13 +55,13 @@ typedef struct {
 } Reverb;
 
 static Reverb g_rv[MAX_BUFS];
-static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356};
-static const int kApBase[RV_APS] = {556, 441};
+static const int kCombBase[RV_COMBS] = {1601, 1861, 2111, 2341};
+static const int kApBase[RV_APS] = {761, 1103};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    // توليد ضوضاء "الوسوسة" العشوائية لكسر تكرار الصدى الميكانيكي
-    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.015f;
-    float in = (x + noise) * 0.04f;
+    // 🌬️ توليد وسوسة عشوائية طويلة ومتداخلة لتكرار الصوت عدة مرات بانتظام طبيعي
+    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.03f;
+    float in = (x + noise) * 0.06f;
     
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
@@ -226,11 +223,9 @@ static void update_peak(float pk) {
 
 static void clear_state(int idx) {
     memset(&g_rv[idx], 0, sizeof(g_rv[idx]));
-    memset(g_line[idx], 0, sizeof(g_line[idx]));
-    g_pos[idx] = 0;
 }
 
-static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mus_frames) {
+static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mus_frames, int is_input) {
     int is_float = (g_fmt.mFormatFlags & kAudioFormatFlagIsFloat) != 0;
     UInt32 bits = g_fmt.mBitsPerChannel;
     if (!((is_float && bits == 32) || (!is_float && bits == 16))) return;
@@ -247,41 +242,18 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     int echo_on = lvl > 0 && eax;
     int ps_on = (semis != 0) && chans == 1;
     int robot_on = g_robot && chans == 1;
-    int mute = g_voice_mute && mus != NULL;
-    int changed = echo_on || ps_on || robot_on || gn != 100 || mus != NULL;
-
-    if (!changed) {
-        float pk = 0.0f;
-        for (size_t i = 0; i < n; i++) {
-            float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
-            float a = x < 0 ? -x : x;
-            if (a > pk) pk = a;
-        }
-        update_peak(pk);
-        if (!g_cleared[idx]) { clear_state(idx); g_cleared[idx] = 1; }
-        g_ps_on[idx] = 0;
-        return;
-    }
-
-    if (!echo_on) {
-        if (!g_cleared[idx]) { clear_state(idx); g_cleared[idx] = 1; }
-    } else {
-        g_cleared[idx] = 0;
-    }
+    int mute = g_voice_mute && mus != NULL && !is_input;
 
     PitchShifter *ps = &g_ps[idx];
-    if (ps_on) {
-        if (!g_ps_on[idx]) { memset(ps, 0, sizeof(*ps)); g_ps_on[idx] = 1; }
-    } else {
-        g_ps_on[idx] = 0;
-    }
+    if (ps_on && !g_ps_on[idx]) { memset(ps, 0, sizeof(*ps)); g_ps_on[idx] = 1; }
+    else if (!ps_on) { g_ps_on[idx] = 0; }
 
     float rate = (float)g_fmt.mSampleRate;
     if (rate < 8000.0f) rate = 48000.0f;
 
     float r = (float)g_range / 100.0f;
-    float cave_fb   = 0.68f + 0.22f * r;
-    float cave_size = 1.0f + 0.9f * r;
+    float cave_fb   = 0.82f + 0.16f * r;
+    float cave_size = 1.3f + 1.4f * r;
     float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
 
     float gain = (float)gn / 100.0f;
@@ -325,7 +297,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
         float a = y < 0 ? -y : y;
         if (a > pk) pk = a;
 
-        if (mus && fi < mus_frames) y = soft_limit(y + mus[fi]);
+        if (mus && fi < mus_frames && !is_input) y = soft_limit(y + mus[fi]);
 
         if (is_float) ((float *)ab->mData)[i] = y;
         else          ((int16_t *)ab->mData)[i] = (int16_t)(y * 32767.0f);
@@ -339,24 +311,23 @@ static OSStatus my_render(AudioUnit unit, AudioUnitRenderActionFlags *flags,
                           const AudioTimeStamp *ts, UInt32 bus,
                           UInt32 frames, AudioBufferList *io) {
     OSStatus st = orig_render(unit, flags, ts, bus, frames, io);
-    if (st != noErr || bus != 1 || io == NULL) return st;
+    if (st != noErr || io == NULL) return st;
 
     if (unit != g_unit || !g_have_fmt) {
         UInt32 sz = sizeof(g_fmt);
         if (AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat,
-                                 kAudioUnitScope_Output, 1, &g_fmt, &sz) == noErr) {
+                                 kAudioUnitScope_Output, bus, &g_fmt, &sz) == noErr) {
             g_unit = unit;
             g_have_fmt = 1;
-        } else {
-            g_have_fmt = 0;
-            return st;
         }
     }
 
-    int mus_on = music_generate(g_mtmp, frames, (float)g_fmt.mSampleRate);
+    int is_input = (bus == 0);
+    int mus_on = (!is_input) ? music_generate(g_mtmp, frames, (float)g_fmt.mSampleRate) : 0;
+
     for (UInt32 b = 0; b < io->mNumberBuffers && b < MAX_BUFS; b++) {
         if (io->mBuffers[b].mData)
-            process_buffer((int)b, &io->mBuffers[b], mus_on ? g_mtmp : NULL, frames);
+            process_buffer((int)b, &io->mBuffers[b], mus_on ? g_mtmp : NULL, frames, is_input);
     }
     return st;
 }
