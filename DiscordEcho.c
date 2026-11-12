@@ -1,4 +1,4 @@
-// DiscordEcho: معالج صوت المايك (نسخة EAX سريعة وخالية من الأخطاء)
+// DiscordEcho: معالج صوت المايك (محاكاة EAX 3D احترافية)
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -46,8 +46,8 @@ static int g_cleared[MAX_BUFS];
 #define RV_APS      2
 #define RV_COMB_MAX 4096
 #define RV_AP_MAX   1024
-#define RV_DAMP     0.30f
-#define RV_WET      2.5f
+#define RV_DAMP     0.45f
+#define RV_WET      1.8f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -62,7 +62,7 @@ static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356};
 static const int kApBase[RV_APS] = {556, 441};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    float in = x * 0.03f;
+    float in = x * 0.04f;
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
         unsigned p = rv->cpos[c];
@@ -249,140 +249,4 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
     if (!changed) {
         float pk = 0.0f;
-        for (size_t i = 0; i < n; i++) {
-            float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
-            float a = x < 0 ? -x : x;
-            if (a > pk) pk = a;
-        }
-        update_peak(pk);
-        if (!g_cleared[idx]) { clear_state(idx); g_cleared[idx] = 1; }
-        g_ps_on[idx] = 0;
-        return;
-    }
-
-    if (!echo_on) {
-        if (!g_cleared[idx]) { clear_state(idx); g_cleared[idx] = 1; }
-    } else {
-        g_cleared[idx] = 0;
-    }
-
-    PitchShifter *ps = &g_ps[idx];
-    if (ps_on) {
-        if (!g_ps_on[idx]) { memset(ps, 0, sizeof(*ps)); g_ps_on[idx] = 1; }
-    } else {
-        g_ps_on[idx] = 0;
-    }
-
-    float rate = (float)g_fmt.mSampleRate;
-    if (rate < 8000.0f) rate = 48000.0f;
-
-    float r = (float)g_range / 100.0f;
-    float rep_fb    = 0.40f + 0.35f * r;
-    float rep_delay = 0.15f + 0.15f * r;
-    float cave_fb   = 0.80f + 0.10f * r;
-    float cave_size = 1.2f + 0.6f * r;
-    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
-
-    float gain = (float)gn / 100.0f;
-    float ratio = powf(2.0f, (float)semis / 12.0f);
-    float rstep = 6.2831853f * 70.0f / rate;
-
-    size_t D = (size_t)(rep_delay * rate) * chans;
-    if (D < 1) D = 1;
-    if (D >= LINE_LEN) D = LINE_LEN - 1;
-
-    float *line = g_line[idx];
-    size_t p = g_pos[idx];
-    if (p >= D) p = 0;
-
-    Reverb *rv = &g_rv[idx];
-    int clen[RV_COMBS], alen[RV_APS];
-    float rs = rate / 44100.0f;
-    for (int c = 0; c < RV_COMBS; c++) {
-        int L = (int)((float)kCombBase[c] * rs * cave_size) * (int)chans;
-        clen[c] = L < 1 ? 1 : (L >= RV_COMB_MAX ? RV_COMB_MAX - 1 : L);
-    }
-    for (int a = 0; a < RV_APS; a++) {
-        int L = (int)((float)kApBase[a] * rs) * (int)chans;
-        alen[a] = L < 1 ? 1 : (L >= RV_AP_MAX ? RV_AP_MAX - 1 : L);
-    }
-
-    float pk = 0.0f;
-    UInt32 ch = 0;
-    size_t fi = 0;
-    for (size_t i = 0; i < n; i++) {
-        float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
-        float y = mute ? 0.0f : x;
-
-        if (ps_on) y = ps_process(ps, y, ratio);
-
-        if (robot_on) {
-            y *= 1.4f * sinf(g_robot_phase);
-            g_robot_phase += rstep;
-            if (g_robot_phase > 6.2831853f) g_robot_phase -= 6.2831853f;
-        }
-
-        if (echo_on) {
-            float wet = 0.0f;
-            float rin = y;
-            float d = line[p];
-            line[p] = y + rep_fb * d;
-            wet += d * 1.2f;
-            rin = y + 0.5f * d;
-            if (++p >= D) p = 0;
-
-            wet += rv_process(rv, rin, cave_fb, clen, alen) * RV_WET;
-            y = y + wet * wet_gain;
-        }
-
-        y = soft_limit(y * gain);
-
-        float a = y < 0 ? -y : y;
-        if (a > pk) pk = a;
-
-        if (mus && fi < mus_frames) y = soft_limit(y + mus[fi]);
-
-        if (is_float) ((float *)ab->mData)[i] = y;
-        else          ((int16_t *)ab->mData)[i] = (int16_t)(y * 32767.0f);
-
-        if (++ch >= chans) { ch = 0; fi++; }
-    }
-    if (echo_on) g_pos[idx] = p;
-    update_peak(pk);
-}
-
-static OSStatus my_render(AudioUnit unit, AudioUnitRenderActionFlags *flags,
-                          const AudioTimeStamp *ts, UInt32 bus,
-                          UInt32 frames, AudioBufferList *io) {
-    OSStatus st = orig_render(unit, flags, ts, bus, frames, io);
-    if (st != noErr || bus != 1 || io == NULL) return st;
-
-    if (unit != g_unit || !g_have_fmt) {
-        UInt32 sz = sizeof(g_fmt);
-        if (AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat,
-                                 kAudioUnitScope_Output, 1, &g_fmt, &sz) == noErr) {
-            g_unit = unit;
-            g_have_fmt = 1;
-        } else {
-            g_have_fmt = 0;
-            return st;
-        }
-    }
-
-    int mus_on = music_generate(g_mtmp, frames, (float)g_fmt.mSampleRate);
-    for (UInt32 b = 0; b < io->mNumberBuffers && b < MAX_BUFS; b++) {
-        if (io->mBuffers[b].mData)
-            process_buffer((int)b, &io->mBuffers[b], mus_on ? g_mtmp : NULL, frames);
-    }
-    return st;
-}
-
-__attribute__((constructor))
-static void init(void) {
-    for (int i = 0; i <= 1024; i++) {
-        float s = sinf(3.14159265f * (float)i / 1024.0f);
-        g_win[i] = s * s;
-    }
-    struct rebinding r = { "AudioUnitRender", (void *)my_render, (void **)&orig_render };
-    rebind_symbols(&r, 1);
-}
+        for (size_
