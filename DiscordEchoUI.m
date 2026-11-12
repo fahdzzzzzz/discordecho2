@@ -338,36 +338,4 @@ static NSString *EchoTime(float s) {
 
     NSArray *quickNames = @[@"1x", @"1.5x", @"2x", @"3x", @"5x"];
     NSArray *quickTags  = @[@100, @150, @200, @300, @500];
-    CGFloat qbw = (w - 6 * 4) / 5.0;
-    for (NSInteger i = 0; i < 5; i++) {
-        CGRect f = CGRectMake(14 + i * (qbw + 6), 68, qbw, 32);
-        [tabAmp addSubview:[self makeButton:quickNames[i] frame:f tag:[quickTags[i] integerValue] action:@selector(gainQuick:)]];
-    }
-
-    UIProgressView *meter = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-    meter.frame = CGRectMake(14, 130, w, 8);
-    meter.trackTintColor = [UIColor colorWithWhite:0.75 alpha:1.0];
-    meter.progressTintColor = [UIColor colorWithRed:0.1 green:0.65 blue:0.25 alpha:1.0];
-    [tabAmp addSubview:meter];
-    self.meter = meter;
-
-    self.songLabel = [self makeLabelAt:CGRectMake(14, 4, w, 32) size:12.5 bold:YES alpha:0.9];
-    self.songLabel.text = @"اختر ملف صوتي من مدير الملفات";
-    [tabMusic addSubview:self.songLabel];
-
-    [tabMusic addSubview:[self makeButton:@"📂 تحميل ملف صوتي" frame:CGRectMake(14, 40, w, 34) tag:0 action:@selector(chooseSong)]];
-
-    UISlider *seek = [self makeSliderAt:CGRectMake(14, 82, w, 28) min:0 max:1 value:0 action:@selector(seekChanged:)];
-    [seek addTarget:self action:@selector(seekBegan:) forControlEvents:UIControlEventTouchDown];
-    [seek addTarget:self action:@selector(seekEnded:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
-    [tabMusic addSubview:seek];
-    self.seekSlider = seek;
-
-    self.timeLabel = [self makeLabelAt:CGRectMake(14, 110, w, 18) size:11.5 bold:NO alpha:0.75];
-    self.timeLabel.text = @"0:00 / 0:00";
-    [tabMusic addSubview:self.timeLabel];
-
-    CGFloat hb = (w - 6) / 2.0;
-    self.playBtn = [self makeButton:@"▶︎ تشغيل" frame:CGRectMake(14, 134, hb, 34) tag:0 action:@selector(playTapped)];
-    [tabMusic addSubview:self.playBtn];
-   
+    CGFloat qbw
