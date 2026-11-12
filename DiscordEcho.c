@@ -1,4 +1,4 @@
-// 🎧 DiscordEcho: معالج الصوت، الوسوسة الطويلة العشوائية، ومراقبة الصوت (Sidetone)
+// 🎧 DiscordEcho: معالج الصوت، الوسوسة العشوائية الواضحة والطويلة
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -18,7 +18,6 @@ static volatile int   g_gain  = 100;
 static volatile int   g_pitch = 0;
 static volatile int   g_robot = 0;
 static volatile int   g_voice_mute = 0;
-static volatile int   g_sidetone = 0;
 static volatile float g_peak  = 0.0f;
 
 void DiscordEcho_SetLevel(int v)  { g_level = v < 0 ? 0 : (v > 100 ? 100 : v); }
@@ -29,7 +28,6 @@ void DiscordEcho_SetGain(int v)   { g_gain = v < 100 ? 100 : (v > 800 ? 800 : v)
 void DiscordEcho_SetPitch(int v)  { g_pitch = v < -12 ? -12 : (v > 12 ? 12 : v); }
 void DiscordEcho_SetRobot(int on) { g_robot = on ? 1 : 0; }
 void DiscordEcho_SetVoiceMute(int on) { g_voice_mute = on ? 1 : 0; }
-void DiscordEcho_SetSidetone(int on) { g_sidetone = on ? 1 : 0; }
 float DiscordEcho_GetPeak(void)   { return g_peak; }
 
 static float soft_limit(float y) {
@@ -41,10 +39,10 @@ static float soft_limit(float y) {
 
 #define RV_COMBS    4
 #define RV_APS      2
-#define RV_COMB_MAX 8192
-#define RV_AP_MAX   2048
-#define RV_DAMP     0.35f
-#define RV_WET      2.2f
+#define RV_COMB_MAX 12288
+#define RV_AP_MAX   4096
+#define RV_DAMP     0.25f
+#define RV_WET      3.2f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -55,13 +53,13 @@ typedef struct {
 } Reverb;
 
 static Reverb g_rv[MAX_BUFS];
-static const int kCombBase[RV_COMBS] = {1601, 1861, 2111, 2341};
-static const int kApBase[RV_APS] = {761, 1103};
+static const int kCombBase[RV_COMBS] = {2203, 2609, 3011, 3407};
+static const int kApBase[RV_APS] = {1013, 1511};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    // 🌬️ توليد وسوسة عشوائية طويلة ومتداخلة لتكرار الصوت عدة مرات بانتظام طبيعي
-    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.03f;
-    float in = (x + noise) * 0.06f;
+    // 🌬️ ضوضاء وسوسة عشوائية واضحة وممتدة لكسر التكرار الميكانيكي بشكل تام
+    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.08f;
+    float in = (x + noise) * 0.12f;
     
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
@@ -232,7 +230,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
     UInt32 bytes_per = bits / 8;
     size_t n = ab->mDataByteSize / bytes_per;
-    UInt32 chans = ab->mNumberChannels ? ab->mNumberChannels : 1;
+    UInt32 chans = ab$mNumberChannels ? ab->mNumberChannels : 1;
 
     int lvl = g_level;
     int gn = g_gain;
@@ -251,10 +249,11 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     float rate = (float)g_fmt.mSampleRate;
     if (rate < 8000.0f) rate = 48000.0f;
 
+    // تحكم دقيق وواسع في الـ Feedback ومساحة البُعد لضمان تكرار صوت واضح وطويل
     float r = (float)g_range / 100.0f;
-    float cave_fb   = 0.82f + 0.16f * r;
-    float cave_size = 1.3f + 1.4f * r;
-    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
+    float cave_fb   = 0.86f + 0.13f * r;
+    float cave_size = 1.5f + 1.8f * r;
+    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f) * 1.3f;
 
     float gain = (float)gn / 100.0f;
     float ratio = powf(2.0f, (float)semis / 12.0f);
