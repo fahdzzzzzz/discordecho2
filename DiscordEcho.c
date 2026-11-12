@@ -1,4 +1,4 @@
-// 🎧 DiscordEcho: معالج الصوت وخوارزمية EAX 3D النمذجة
+// 🎧 DiscordEcho: معالج الصوت وتأثير الوسوسة العشوائية مع صدى EAX 3D
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -46,8 +46,8 @@ static int g_cleared[MAX_BUFS];
 #define RV_APS      2
 #define RV_COMB_MAX 4096
 #define RV_AP_MAX   1024
-#define RV_DAMP     0.45f
-#define RV_WET      1.8f
+#define RV_DAMP     0.50f
+#define RV_WET      1.6f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -62,7 +62,10 @@ static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356};
 static const int kApBase[RV_APS] = {556, 441};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    float in = x * 0.04f;
+    // توليد عشوائية "الوسوسة" الخفيفة بكسر تكرار الصدى الصريح
+    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.015f;
+    float in = (x + noise) * 0.04f;
+    
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
         unsigned p = rv->cpos[c];
@@ -277,8 +280,8 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     if (rate < 8000.0f) rate = 48000.0f;
 
     float r = (float)g_range / 100.0f;
-    float cave_fb   = 0.70f + 0.20f * r;
-    float cave_size = 1.0f + 0.8f * r;
+    float cave_fb   = 0.68f + 0.22f * r;
+    float cave_size = 1.0f + 0.9f * r;
     float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
 
     float gain = (float)gn / 100.0f;
