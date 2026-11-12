@@ -563,7 +563,7 @@ static void echo_setup_window(void) {
     if (!targetScene) {
         for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
             if ([s isKindOfClass:UIWindowScene.class]) {
-                targetScene = (UIScene *)s;
+                targetScene = (UIWindowScene *)s;
                 break;
             }
         }
