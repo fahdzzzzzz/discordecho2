@@ -57,7 +57,6 @@ static const int kCombBase[RV_COMBS] = {2203, 2609, 3011, 3407};
 static const int kApBase[RV_APS] = {1013, 1511};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    // 🌬️ ضوضاء وسوسة عشوائية واضحة وممتدة لكسر التكرار الميكانيكي بشكل تام
     float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.08f;
     float in = (x + noise) * 0.12f;
     
@@ -230,7 +229,8 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
     UInt32 bytes_per = bits / 8;
     size_t n = ab->mDataByteSize / bytes_per;
-    UInt32 chans = ab$mNumberChannels ? ab->mNumberChannels : 1;
+    // تم تصحيح الخطأ هنا باستخدام -> بدلاً من $
+    UInt32 chans = ab->mNumberChannels ? ab->mNumberChannels : 1;
 
     int lvl = g_level;
     int gn = g_gain;
@@ -249,7 +249,6 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     float rate = (float)g_fmt.mSampleRate;
     if (rate < 8000.0f) rate = 48000.0f;
 
-    // تحكم دقيق وواسع في الـ Feedback ومساحة البُعد لضمان تكرار صوت واضح وطويل
     float r = (float)g_range / 100.0f;
     float cave_fb   = 0.86f + 0.13f * r;
     float cave_size = 1.5f + 1.8f * r;
