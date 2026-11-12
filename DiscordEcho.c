@@ -1,4 +1,4 @@
-// 🎧 DiscordEcho: معالج الصوت، الوسوسة العشوائية الواضحة والطويلة
+// 🎧 DiscordEcho: معالج الصوت مع تردد الهمس المستقل ومودات الكرت الفضي
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -13,6 +13,7 @@
 static volatile int   g_level = 60;
 static volatile int   g_boost = 150;
 static volatile int   g_range = 70;
+static volatile int   g_whisper_freq = 50; // تردد الهمس المستقل
 static volatile int   g_eax_mode = 1;
 static volatile int   g_gain  = 100;
 static volatile int   g_pitch = 0;
@@ -23,6 +24,7 @@ static volatile float g_peak  = 0.0f;
 void DiscordEcho_SetLevel(int v)  { g_level = v < 0 ? 0 : (v > 100 ? 100 : v); }
 void DiscordEcho_SetEchoBoost(int v) { g_boost = v < 100 ? 100 : (v > 400 ? 400 : v); }
 void DiscordEcho_SetRange(int v)  { g_range = v < 0 ? 0 : (v > 100 ? 100 : v); }
+void DiscordEcho_SetWhisperFreq(int v) { g_whisper_freq = v < 0 ? 0 : (v > 100 ? 100 : v); }
 void DiscordEcho_SetEAXMode(int on) { g_eax_mode = on ? 1 : 0; }
 void DiscordEcho_SetGain(int v)   { g_gain = v < 100 ? 100 : (v > 800 ? 800 : v); }
 void DiscordEcho_SetPitch(int v)  { g_pitch = v < -12 ? -12 : (v > 12 ? 12 : v); }
@@ -39,10 +41,10 @@ static float soft_limit(float y) {
 
 #define RV_COMBS    4
 #define RV_APS      2
-#define RV_COMB_MAX 12288
+#define RV_COMB_MAX 14336
 #define RV_AP_MAX   4096
-#define RV_DAMP     0.25f
-#define RV_WET      3.2f
+#define RV_DAMP     0.20f
+#define RV_WET      4.0f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -56,9 +58,11 @@ static Reverb g_rv[MAX_BUFS];
 static const int kCombBase[RV_COMBS] = {2203, 2609, 3011, 3407};
 static const int kApBase[RV_APS] = {1013, 1511};
 
-static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * 0.08f;
-    float in = (x + noise) * 0.12f;
+static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen, float w_freq) {
+    // 🌬️ وسوسة عشوائية تتأثر بتردد الهمس المستقل لزيادة الوضوح والانتشار
+    float noise_scale = 0.05f + (w_freq / 100.0f) * 0.12f;
+    float noise = ((float)(rand() % 1000) / 500.0f - 1.0f) * noise_scale;
+    float in = (x + noise) * 0.15f;
     
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
@@ -218,10 +222,6 @@ static void update_peak(float pk) {
     g_peak = pk > prev ? pk : prev;
 }
 
-static void clear_state(int idx) {
-    memset(&g_rv[idx], 0, sizeof(g_rv[idx]));
-}
-
 static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mus_frames, int is_input) {
     int is_float = (g_fmt.mFormatFlags & kAudioFormatFlagIsFloat) != 0;
     UInt32 bits = g_fmt.mBitsPerChannel;
@@ -229,13 +229,13 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
 
     UInt32 bytes_per = bits / 8;
     size_t n = ab->mDataByteSize / bytes_per;
-    // تم تصحيح الخطأ هنا باستخدام -> بدلاً من $
     UInt32 chans = ab->mNumberChannels ? ab->mNumberChannels : 1;
 
     int lvl = g_level;
     int gn = g_gain;
     int semis = g_pitch;
     int eax = g_eax_mode;
+    int w_freq = g_whisper_freq;
 
     int echo_on = lvl > 0 && eax;
     int ps_on = (semis != 0) && chans == 1;
@@ -252,7 +252,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     float r = (float)g_range / 100.0f;
     float cave_fb   = 0.86f + 0.13f * r;
     float cave_size = 1.5f + 1.8f * r;
-    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f) * 1.3f;
+    float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f) * 1.5f;
 
     float gain = (float)gn / 100.0f;
     float ratio = powf(2.0f, (float)semis / 12.0f);
@@ -286,7 +286,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
         }
 
         if (echo_on) {
-            float wet = rv_process(rv, y, cave_fb, clen, alen) * RV_WET;
+            float wet = rv_process(rv, y, cave_fb, clen, alen, (float)w_freq) * RV_WET;
             y = y + wet * wet_gain;
         }
 
