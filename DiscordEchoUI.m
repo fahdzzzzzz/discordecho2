@@ -1,4 +1,4 @@
-// DiscordEchoUI: واجهة كرت الصوت الفضي Creative EAX
+// 🎛️ DiscordEchoUI: واجهة كرت الصوت الفضي Creative EAX
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -248,7 +248,6 @@ static NSString *EchoTime(float s) {
     self.fab = fab;
 
     UIView *panel = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelW, kPanelH)];
-    // طابع كريتف الفضي المعدني الكلاسيكي EAX
     panel.backgroundColor = [UIColor colorWithRed:0.88 green:0.90 blue:0.93 alpha:0.97];
     panel.layer.cornerRadius = 14;
     panel.layer.borderWidth = 1.5;
