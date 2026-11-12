@@ -1,4 +1,4 @@
-// 🎛️ DiscordEchoUI: واجهة التحكم المطورة لصدى Creative EAX وتردد الهمس
+// 🎛️ DiscordEchoUI: واجهة التحكم لصدى Creative EAX
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -338,4 +338,103 @@ static NSString *EchoTime(float s) {
 
     NSArray *quickNames = @[@"1x", @"1.5x", @"2x", @"3x", @"5x"];
     NSArray *quickTags  = @[@100, @150, @200, @300, @500];
-    CGFloat qbw
+    CGFloat qbw = (w - 6 * 4) / 5.0;
+    for (NSInteger i = 0; i < 5; i++) {
+        CGRect f = CGRectMake(14 + i * (qbw + 6), 68, qbw, 32);
+        [tabAmp addSubview:[self makeButton:quickNames[i] frame:f tag:[quickTags[i] integerValue] action:@selector(gainQuick:)]];
+    }
+
+    UIProgressView *meter = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
+    meter.frame = CGRectMake(14, 130, w, 8);
+    meter.trackTintColor = [UIColor colorWithWhite:0.75 alpha:1.0];
+    meter.progressTintColor = [UIColor colorWithRed:0.1 green:0.65 blue:0.25 alpha:1.0];
+    [tabAmp addSubview:meter];
+    self.meter = meter;
+
+    self.songLabel = [self makeLabelAt:CGRectMake(14, 4, w, 32) size:12.5 bold:YES alpha:0.9];
+    self.songLabel.text = @"اختر ملف صوتي من مدير الملفات";
+    [tabMusic addSubview:self.songLabel];
+
+    [tabMusic addSubview:[self makeButton:@"📂 تحميل ملف صوتي" frame:CGRectMake(14, 40, w, 34) tag:0 action:@selector(chooseSong)]];
+
+    UISlider *seek = [self makeSliderAt:CGRectMake(14, 82, w, 28) min:0 max:1 value:0 action:@selector(seekChanged:)];
+    [seek addTarget:self action:@selector(seekBegan:) forControlEvents:UIControlEventTouchDown];
+    [seek addTarget:self action:@selector(seekEnded:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+    [tabMusic addSubview:seek];
+    self.seekSlider = seek;
+
+    self.timeLabel = [self makeLabelAt:CGRectMake(14, 110, w, 18) size:11.5 bold:NO alpha:0.75];
+    self.timeLabel.text = @"0:00 / 0:00";
+    [tabMusic addSubview:self.timeLabel];
+
+    CGFloat hb = (w - 6) / 2.0;
+    self.playBtn = [self makeButton:@"▶︎ تشغيل" frame:CGRectMake(14, 134, hb, 34) tag:0 action:@selector(playTapped)];
+    [tabMusic addSubview:self.playBtn];
+    [tabMusic addSubview:[self makeButton:@"⏹ إيقاف" frame:CGRectMake(14 + hb + 6, 134, hb, 34) tag:0 action:@selector(stopTapped)]];
+
+    self.volLabel = [self makeLabelAt:CGRectMake(14, 174, w, 22) size:14 bold:YES alpha:0.95];
+    [tabMusic addSubview:self.volLabel];
+    self.volSlider = [self makeSliderAt:CGRectMake(14, 198, w, 28) min:0 max:200 value:mvol action:@selector(volChanged:)];
+    [tabMusic addSubview:self.volSlider];
+
+    [self addToggleTo:tabMusic title:@"🔁 تكرار التشغيل" x:14 y:234 width:w on:mloop != 0 action:@selector(loopToggled:)];
+    [self addToggleTo:tabMusic title:@"🔇 كتم المايك مع الأغنية" x:14 y:270 width:w on:mute != 0 action:@selector(muteToggled:)];
+
+    [self updateEchoLabel:level];
+    [self updateBoostLabel:boost];
+    [self updateRangeLabel:range];
+    [self updateWFreqLabel:wfreq];
+    [self updatePitchLabel];
+    [self updateGainLabel:gain];
+    [self updateVolLabel:mvol];
+
+    DiscordEcho_SetLevel(level);
+    DiscordEcho_SetEchoBoost(boost);
+    DiscordEcho_SetRange(range);
+    DiscordEcho_SetWhisperFreq(wfreq);
+    DiscordEcho_SetEAXMode(eax);
+    DiscordEcho_SetGain(gain);
+    DiscordEcho_SetPitch(pitch);
+    DiscordEcho_SetRobot(self.robot ? 1 : 0);
+    DiscordEcho_MusicSetVolume(mvol);
+    DiscordEcho_MusicSetLoop(mloop);
+    DiscordEcho_SetVoiceMute(mute);
+}
+
+- (void)updateEchoLabel:(int)v { self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"حجم صدى الكهف: %d", v]; }
+- (void)updateBoostLabel:(int)v { self.boostLabel.text = [NSString stringWithFormat:@"قوة التضخيم (Boost): %d%%", v]; }
+- (void)updateRangeLabel:(int)v { self.rangeLabel.text = [NSString stringWithFormat:@"مساحة الكهف (3D): %d", v]; }
+- (void)updateWFreqLabel:(int)v { self.wFreqLabel.text = [NSString stringWithFormat:@"تردد الهمس: %d", v]; }
+- (void)updatePitchLabel {
+    int st = (int)lroundf(self.pitchSlider.value);
+    NSString *t = (st == 0) ? @"النبرة: عادية" : [NSString stringWithFormat:@"النبرة: %+d نغمة", st];
+    if (self.robot) t = [t stringByAppendingString:@"  ·  🤖 روبوت"];
+    self.pitchLabel.text = t;
+}
+- (void)updateGainLabel:(int)v { self.gainLabel.text = [NSString stringWithFormat:@"مستوى المايك: %d%%", v]; }
+- (void)updateVolLabel:(int)v { self.volLabel.text = [NSString stringWithFormat:@"مستوى الأغنية: %d%%", v]; }
+
+- (void)tabChanged:(UISegmentedControl *)sender {
+    for (NSUInteger i = 0; i < self.tabViews.count; i++)
+        self.tabViews[i].hidden = ((NSInteger)i != sender.selectedSegmentIndex);
+}
+
+- (void)saveInt:(int)v key:(NSString *)k {
+    [[NSUserDefaults standardUserDefaults] setInteger:v forKey:k];
+}
+
+- (void)eaxToggled:(UISwitch *)s { DiscordEcho_SetEAXMode(s.on ? 1 : 0); [self saveInt:s.on ? 1 : 0 key:kEAXKey]; }
+- (void)echoChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetLevel(v); [self saveInt:v key:kLevelKey]; [self updateEchoLabel:v]; }
+- (void)boostChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetEchoBoost(v); [self saveInt:v key:kBoostKey]; [self updateBoostLabel:v]; }
+- (void)rangeChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetRange(v); [self saveInt:v key:kRangeKey]; [self updateRangeLabel:v]; }
+- (void)wFreqChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetWhisperFreq(v); [self saveInt:v key:kWFreqKey]; [self updateWFreqLabel:v]; }
+
+- (void)eaxPresetTapped:(UIButton *)b {
+    int lvl = 60, bst = 140, rng = 65, wf = 45;
+    if (b.tag == 1) { lvl = 75; bst = 200; rng = 85; wf = 65; }
+    else if (b.tag == 2) { lvl = 45; bst = 120; rng = 50; wf = 30; }
+    else if (b.tag == 3) { lvl = 90; bst = 260; rng = 95; wf = 80; }
+    else if (b.tag == 4) { lvl = 55; bst = 130; rng = 60; wf = 40; }
+
+    self.echoSlider.value = lvl; [self echoChanged:self.echoSlider];
+    self.boostSlider.value
