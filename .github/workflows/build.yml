@@ -16,8 +16,7 @@ jobs:
           clang -dynamiclib -arch arm64 -isysroot $SDK -miphoneos-version-min=14.0 \
             -framework Foundation -framework UIKit -framework AudioToolbox -framework CoreGraphics -framework AVFoundation \
             echo.o ui.o fishhook.o -o libdiscordecho.dylib
-          # استخدام صيغة توقيع مرنة لتفادي الرفض
-          codesign --sign - --force libdiscordecho.dylib || true
+          codesign -f -s - libdiscordecho.dylib
       - uses: actions/upload-artifact@v4
         with:
           name: libdiscordecho
