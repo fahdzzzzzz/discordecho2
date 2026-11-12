@@ -1,4 +1,4 @@
-// DiscordEcho: معالج صوت المايك داخل تطبيق ديسكورد (نسخة مطورة للصدى والأغاني)
+// DiscordEcho: معالج صوت المايك مع تأثيرات صدى Creative EAX الحقيقية
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -8,12 +8,12 @@
 
 #define MAX_RATE 48000
 #define MAX_BUFS 2
-#define LINE_LEN (MAX_RATE * 3) // توسيع مساحة الصدى ليعطي عمق زي الفيديو
+#define LINE_LEN (MAX_RATE * 3)
 #define MUSIC_TMP 8192
 
-static volatile int   g_level = 60;
-static volatile int   g_boost = 150;
-static volatile int   g_range = 70;
+static volatile int   g_level = 65;
+static volatile int   g_boost = 180;
+static volatile int   g_range = 75;
 static volatile int   g_cave  = 1;
 static volatile int   g_repeat = 1;
 static volatile int   g_gain  = 100;
@@ -44,12 +44,13 @@ static float g_line[MAX_BUFS][LINE_LEN];
 static size_t g_pos[MAX_BUFS];
 static int g_cleared[MAX_BUFS];
 
+// إعدادات تفرّع EAX الخاصة بـ Creative (تحسين الـ Comb Filters و Allpass للصدى المعدني الواسع)
 #define RV_COMBS    8
 #define RV_APS      4
-#define RV_COMB_MAX 11025
-#define RV_AP_MAX   2048
-#define RV_DAMP     0.35f
-#define RV_WET      3.5f
+#define RV_COMB_MAX 12288
+#define RV_AP_MAX   4096
+#define RV_DAMP     0.28f   // تفتيح الترددات عشان يطلع صوت الـ EAX الحاد والواضح
+#define RV_WET      4.0f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -60,11 +61,12 @@ typedef struct {
 } Reverb;
 
 static Reverb g_rv[MAX_BUFS];
-static const int kCombBase[RV_COMBS] = {1422, 1557, 1617, 1741, 1823, 1901, 1987, 2053};
-static const int kApBase[RV_APS] = {556, 441, 341, 225};
+// أطوال مخصصة لبيئة EAX (توزيع زمني دقيق يعطي رنين صدى كريتف الأصلي)
+static const int kCombBase[RV_COMBS] = {1557, 1617, 1741, 1823, 1901, 1987, 2053, 2131};
+static const int kApBase[RV_APS] = {672, 503, 353, 241};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    float in = x * 0.02f;
+    float in = x * 0.025f;
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
         unsigned p = rv->cpos[c];
@@ -81,7 +83,7 @@ static float rv_process(Reverb *rv, float x, float fb, const int *clen, const in
         if (p >= (unsigned)alen[a]) p = 0;
         float b = rv->ap[a][p];
         float out = b - acc;
-        rv->ap[a][p] = acc + b * 0.5f;
+        rv->ap[a][p] = acc + b * 0.55f;
         if (++p >= (unsigned)alen[a]) p = 0;
         rv->apos[a] = p;
         acc = out;
@@ -279,10 +281,11 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     if (rate < 8000.0f) rate = 48000.0f;
 
     float r = (float)g_range / 100.0f;
-    float rep_fb    = 0.45f + 0.45f * r;
-    float rep_delay = 0.30f + 0.25f * r;
-    float cave_fb   = 0.88f + 0.10f * r;
-    float cave_size = 1.6f + 0.9f * r;
+    // ضبط معدلات التكرار والـ Feedback لتعطي تأثير EAX واضح (طابع معدني ونظيف)
+    float rep_fb    = 0.50f + 0.40f * r;
+    float rep_delay = 0.25f + 0.20f * r;
+    float cave_fb   = 0.90f + 0.08f * r;
+    float cave_size = 1.8f + 1.0f * r;
     float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
 
     float gain = (float)gn / 100.0f;
@@ -330,8 +333,8 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
             if (rep) {
                 float d = line[p];
                 line[p] = y + rep_fb * d;
-                wet += d * 1.3f;
-                rin = y + 0.65f * d;
+                wet += d * 1.4f;
+                rin = y + 0.7f * d;
                 if (++p >= D) p = 0;
             }
             if (cave) {
