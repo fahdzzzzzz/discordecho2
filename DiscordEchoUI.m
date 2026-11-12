@@ -1,4 +1,4 @@
-// 🎛️ DiscordEchoUI: واجهة كرت الصوت الفضي Creative EAX مع خيار سماع الصوت (Sidetone)
+// 🎛️ DiscordEchoUI: واجهة كرت الصوت الفضي Creative EAX (بدون زر سماع الصوت)
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -12,7 +12,6 @@ extern void DiscordEcho_SetGain(int v);
 extern void DiscordEcho_SetPitch(int v);
 extern void DiscordEcho_SetRobot(int on);
 extern void DiscordEcho_SetVoiceMute(int on);
-extern void DiscordEcho_SetSidetone(int on);
 extern float DiscordEcho_GetPeak(void);
 extern int   DiscordEcho_MusicLoad(float *samples, size_t count);
 extern void  DiscordEcho_MusicPlay(int play);
@@ -34,10 +33,9 @@ static NSString *const kRobotKey = @"DiscordEchoRobot";
 static NSString *const kMusicVolKey = @"DiscordEchoMusicVol";
 static NSString *const kMusicLoopKey = @"DiscordEchoMusicLoop";
 static NSString *const kMuteKey  = @"DiscordEchoVoiceMute";
-static NSString *const kSidetoneKey = @"DiscordEchoSidetone";
 
 static const CGFloat kPanelW = 320;
-static const CGFloat kPanelH = 430;
+static const CGFloat kPanelH = 410;
 static const CGFloat kTabTop = 56;
 
 static int EchoInt(NSString *key, int def) {
@@ -234,7 +232,6 @@ static NSString *EchoTime(float s) {
     int mvol  = EchoInt(kMusicVolKey, 100);
     int mloop = EchoInt(kMusicLoopKey, 0);
     int mute  = EchoInt(kMuteKey, 0);
-    int sidetone = EchoInt(kSidetoneKey, 0);
 
     UIButton *fab = [UIButton buttonWithType:UIButtonTypeCustom];
     fab.frame = CGRectMake(20, 140, 52, 52);
@@ -283,25 +280,23 @@ static NSString *EchoTime(float s) {
 
     [self addToggleTo:tabEcho title:@"✨ Creative EAX Whisper 3D" x:14 y:4 width:w on:eax != 0 action:@selector(eaxToggled:)];
 
-    self.echoLabel = [self makeLabelAt:CGRectMake(14, 40, w, 22) size:13.5 bold:YES alpha:0.95];
+    self.echoLabel = [self makeLabelAt:CGRectMake(14, 42, w, 22) size:14 bold:YES alpha:0.95];
     [tabEcho addSubview:self.echoLabel];
-    self.echoSlider = [self makeSliderAt:CGRectMake(14, 62, w, 26) min:0 max:100 value:level action:@selector(echoChanged:)];
+    self.echoSlider = [self makeSliderAt:CGRectMake(14, 66, w, 28) min:0 max:100 value:level action:@selector(echoChanged:)];
     [tabEcho addSubview:self.echoSlider];
 
-    self.boostLabel = [self makeLabelAt:CGRectMake(14, 92, w, 22) size:13.5 bold:YES alpha:0.95];
+    self.boostLabel = [self makeLabelAt:CGRectMake(14, 100, w, 22) size:14 bold:YES alpha:0.95];
     [tabEcho addSubview:self.boostLabel];
-    self.boostSlider = [self makeSliderAt:CGRectMake(14, 114, w, 26) min:100 max:400 value:boost action:@selector(boostChanged:)];
+    self.boostSlider = [self makeSliderAt:CGRectMake(14, 124, w, 28) min:100 max:400 value:boost action:@selector(boostChanged:)];
     [tabEcho addSubview:self.boostSlider];
 
-    self.rangeLabel = [self makeLabelAt:CGRectMake(14, 144, w, 22) size:13.5 bold:YES alpha:0.95];
+    self.rangeLabel = [self makeLabelAt:CGRectMake(14, 158, w, 22) size:14 bold:YES alpha:0.95];
     [tabEcho addSubview:self.rangeLabel];
-    self.rangeSlider = [self makeSliderAt:CGRectMake(14, 166, w, 26) min:0 max:100 value:range action:@selector(rangeChanged:)];
+    self.rangeSlider = [self makeSliderAt:CGRectMake(14, 182, w, 28) min:0 max:100 value:range action:@selector(rangeChanged:)];
     [tabEcho addSubview:self.rangeSlider];
 
-    [self addToggleTo:tabEcho title:@"🎧 سماع صوتي (Sidetone)" x:14 y:200 width:w on:sidetone != 0 action:@selector(sidetoneToggled:)];
-
-    UILabel *echoHint = [self makeLabelAt:CGRectMake(14, 240, w, 75) size:11 bold:NO alpha:0.65];
-    echoHint.text = @"تأثير الوسوسة الطويلة والصدى المتكرر يمنحك صوت كهف محيطي يتداخل بشكل عشوائي فريد تماماً.";
+    UILabel *echoHint = [self makeLabelAt:CGRectMake(14, 218, w, 65) size:11.5 bold:NO alpha:0.65];
+    echoHint.text = @"تأثير الوسوسة العشوائية يدمج همساً ناعماً يكسر التكرار الميكانيكي تماماً ويمنحك أجواء استوديو كريتف الفاخرة.";
     [tabEcho addSubview:echoHint];
 
     self.pitchLabel = [self makeLabelAt:CGRectMake(14, 4, w, 24) size:14 bold:YES alpha:0.95];
@@ -383,7 +378,6 @@ static NSString *EchoTime(float s) {
     DiscordEcho_MusicSetVolume(mvol);
     DiscordEcho_MusicSetLoop(mloop);
     DiscordEcho_SetVoiceMute(mute);
-    DiscordEcho_SetSidetone(sidetone);
 }
 
 - (void)updateEchoLabel:(int)v { self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"حجم وسوسة EAX: %d", v]; }
@@ -408,7 +402,6 @@ static NSString *EchoTime(float s) {
 }
 
 - (void)eaxToggled:(UISwitch *)s { DiscordEcho_SetEAXMode(s.on ? 1 : 0); [self saveInt:s.on ? 1 : 0 key:kEAXKey]; }
-- (void)sidetoneToggled:(UISwitch *)s { DiscordEcho_SetSidetone(s.on ? 1 : 0); [self saveInt:s.on ? 1 : 0 key:kSidetoneKey]; }
 - (void)echoChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetLevel(v); [self saveInt:v key:kLevelKey]; [self updateEchoLabel:v]; }
 - (void)boostChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetEchoBoost(v); [self saveInt:v key:kBoostKey]; [self updateBoostLabel:v]; }
 - (void)rangeChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetRange(v); [self saveInt:v key:kRangeKey]; [self updateRangeLabel:v]; }
@@ -588,7 +581,6 @@ static void echo_ui_init(void) {
     DiscordEcho_MusicSetVolume(EchoInt(kMusicVolKey, 100));
     DiscordEcho_MusicSetLoop(EchoInt(kMusicLoopKey, 0));
     DiscordEcho_SetVoiceMute(EchoInt(kMuteKey, 0));
-    DiscordEcho_SetSidetone(EchoInt(kSidetoneKey, 0));
 
     [[NSNotificationCenter defaultCenter]
         addObserverForName:UIApplicationDidBecomeActiveNotification
