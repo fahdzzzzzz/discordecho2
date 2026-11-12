@@ -1,0 +1,39 @@
+
+name: Build iOS Audio DSP Library
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "EchoAudioEngine.swift"
+      - ".github/workflows/build-dylib.yml"
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Dylib
+        run: |
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+
+          xcrun swiftc \
+            -emit-library \
+            -parse-as-library \
+            -swift-version 5 \
+            -module-name CreativeEAXDSP \
+            -target arm64-apple-ios16.0 \
+            -sdk "$SDK" \
+            -framework AVFoundation \
+            -framework Combine \
+            EchoAudioEngine.swift \
+            -o libCreativeEAXDSP.dylib
+
+      - name: Upload Dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: CreativeEAXDSP-ios-arm64
+          path: libCreativeEAXDSP.dylib
