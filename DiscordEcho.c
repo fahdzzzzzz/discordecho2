@@ -1,13 +1,4 @@
-// DiscordEcho: معالج صوت المايك داخل تطبيق (مثل ديسكورد)
-//   - تغيير النبرة (pitch) من -12 إلى +12 نغمة + صوت روبوت
-//   - صدى: كهف (reverb ممتد) + تكرار (الو الو الو)، يشتغلون مع بعض أو لحالهم
-//       شدة 0..100، مضخّم الصدى 100%..400%، مدى الصدى 0..100
-//   - تضخيم الصوت من 100% إلى 800% مع حد ناعم يمنع التقطع
-//   - مشغّل أغنية: تتمزج داخل المايك فيسمعها اللي معك في الكول
-//   - قياس مستوى المايك للعرض في القائمة
-// يعمل عبر fishhook: يستبدل AudioUnitRender ويعدّل بيانات المايك قبل ما يرسلها التطبيق.
-// الترتيب: نبرة -> روبوت -> صدى -> تضخيم -> (+ الأغنية).
-
+// DiscordEcho: معالج صوت المايك داخل تطبيق ديسكورد (نسخة مطورة للصدى والأغاني)
 #include <AudioToolbox/AudioToolbox.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -17,20 +8,19 @@
 
 #define MAX_RATE 48000
 #define MAX_BUFS 2
-#define LINE_LEN (MAX_RATE * 2)
+#define LINE_LEN (MAX_RATE * 3) // توسيع مساحة الصدى ليعطي عمق زي الفيديو
 #define MUSIC_TMP 8192
 
-// ---------- إعدادات تتغير من القائمة ----------
-static volatile int   g_level = 50;    // شدة الصدى 0..100
-static volatile int   g_boost = 100;   // مضخّم الصدى 100..400 (%)
-static volatile int   g_range = 60;    // مدى الصدى 0..100
-static volatile int   g_cave  = 1;     // كهف
-static volatile int   g_repeat = 1;    // تكرار
-static volatile int   g_gain  = 100;   // تضخيم الصوت 100..800 (%)
-static volatile int   g_pitch = 0;     // نغمات -12..12
-static volatile int   g_robot = 0;     // 0/1
-static volatile int   g_voice_mute = 0;// كتم صوتي أثناء الأغنية
-static volatile float g_peak  = 0.0f;  // مستوى المايك 0..1
+static volatile int   g_level = 60;
+static volatile int   g_boost = 150;
+static volatile int   g_range = 70;
+static volatile int   g_cave  = 1;
+static volatile int   g_repeat = 1;
+static volatile int   g_gain  = 100;
+static volatile int   g_pitch = 0;
+static volatile int   g_robot = 0;
+static volatile int   g_voice_mute = 0;
+static volatile float g_peak  = 0.0f;
 
 void DiscordEcho_SetLevel(int v)  { g_level = v < 0 ? 0 : (v > 100 ? 100 : v); }
 void DiscordEcho_SetEchoBoost(int v) { g_boost = v < 100 ? 100 : (v > 400 ? 400 : v); }
@@ -43,7 +33,6 @@ void DiscordEcho_SetRobot(int on) { g_robot = on ? 1 : 0; }
 void DiscordEcho_SetVoiceMute(int on) { g_voice_mute = on ? 1 : 0; }
 float DiscordEcho_GetPeak(void)   { return g_peak; }
 
-// ---------- حد ناعم: يرفع الصوت بدون ما يقطعه ----------
 static float soft_limit(float y) {
     float a = y < 0 ? -y : y;
     if (a <= 0.6f) return y;
@@ -51,19 +40,16 @@ static float soft_limit(float y) {
     return y < 0 ? -s : s;
 }
 
-// ---------- التكرار (delay مع feedback) ----------
-#define REP_GAIN 1.2f
 static float g_line[MAX_BUFS][LINE_LEN];
 static size_t g_pos[MAX_BUFS];
 static int g_cleared[MAX_BUFS];
 
-// ---------- كهف (reverb): 8 مرشحات comb متوازية + 4 allpass متسلسلة ----------
 #define RV_COMBS    8
 #define RV_APS      4
-#define RV_COMB_MAX 8192
+#define RV_COMB_MAX 11025
 #define RV_AP_MAX   2048
-#define RV_DAMP     0.40f   // تغميق الذيل (أكبر = أغمق)
-#define RV_WET      3.0f
+#define RV_DAMP     0.35f
+#define RV_WET      3.5f
 
 typedef struct {
     float comb[RV_COMBS][RV_COMB_MAX];
@@ -74,11 +60,11 @@ typedef struct {
 } Reverb;
 
 static Reverb g_rv[MAX_BUFS];
-static const int kCombBase[RV_COMBS] = {1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617};
+static const int kCombBase[RV_COMBS] = {1422, 1557, 1617, 1741, 1823, 1901, 1987, 2053};
 static const int kApBase[RV_APS] = {556, 441, 341, 225};
 
 static float rv_process(Reverb *rv, float x, float fb, const int *clen, const int *alen) {
-    float in = x * 0.015f;
+    float in = x * 0.02f;
     float acc = 0.0f;
     for (int c = 0; c < RV_COMBS; c++) {
         unsigned p = rv->cpos[c];
@@ -103,9 +89,8 @@ static float rv_process(Reverb *rv, float x, float fb, const int *clen, const in
     return acc;
 }
 
-// ---------- مغيّر النبرة (خط تأخير بنافذتين متداخلتين) ----------
 #define PS_WIN 2048
-#define PS_BUF 4096   // لازم يكون من مضاعفات 2 وأكبر من PS_WIN + 2
+#define PS_BUF 4096
 
 typedef struct {
     float buf[PS_BUF];
@@ -140,18 +125,16 @@ static float ps_process(PitchShifter *ps, float x, float ratio) {
     return y;
 }
 
-// ---------- مشغّل الأغنية (مخزّنة كعينات أحادية 48kHz) ----------
 typedef struct { float *data; size_t len; } MusicSlot;
 static MusicSlot g_mslot[2];
-static volatile int    g_mcur = -1;      // الخانة المستخدمة حالياً (-1 = ما فيه)
+static volatile int    g_mcur = -1;
 static volatile int    g_mplaying = 0;
 static volatile int    g_mloop = 0;
-static volatile int    g_mvol = 100;     // 0..200 (%)
-static volatile double g_mpos = 0.0;     // موضع التشغيل بالعينات
-static volatile double g_mseek = -1.0;   // طلب قفز (-1 = ما فيه)
+static volatile int    g_mvol = 100;
+static volatile double g_mpos = 0.0;
+static volatile double g_mseek = -1.0;
 static float g_mtmp[MUSIC_TMP];
 
-// تأخذ ملكية المصفوفة (malloc). تتحرر لما تتحمّل أغنية ثانية.
 int DiscordEcho_MusicLoad(float *samples, size_t count) {
     if (!samples || count < 2) return 0;
     int next = (g_mcur == 0) ? 1 : 0;
@@ -188,7 +171,6 @@ float DiscordEcho_MusicDuration(void) {
     return cur < 0 ? 0.0f : (float)((double)g_mslot[cur].len / 48000.0);
 }
 
-// تولّد عينات الأغنية لهذي الدفعة (بمعدل المايك). ترجع 1 إذا فيه أغنية تشتغل.
 static int music_generate(float *out, UInt32 frames, float rate) {
     int cur = g_mcur;
     if (cur < 0 || frames == 0 || frames > MUSIC_TMP) return 0;
@@ -228,7 +210,6 @@ static int music_generate(float *out, UInt32 frames, float rate) {
     return 1;
 }
 
-// ---------- الهوك ----------
 static AudioUnit g_unit;
 static AudioStreamBasicDescription g_fmt;
 static int g_have_fmt;
@@ -263,17 +244,15 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     int cave = g_cave, rep = g_repeat;
 
     int echo_on = lvl > 0 && (cave || rep);
-    int ps_on = (semis != 0) && chans == 1;     // النبرة والروبوت للمايك الأحادي فقط
+    int ps_on = (semis != 0) && chans == 1;
     int robot_on = g_robot && chans == 1;
     int mute = g_voice_mute && mus != NULL;
     int changed = echo_on || ps_on || robot_on || gn != 100 || mus != NULL;
 
-    // لا شي مفعّل: بس نقيس المستوى ونخلي الصوت يمر كما هو
     if (!changed) {
         float pk = 0.0f;
         for (size_t i = 0; i < n; i++) {
-            float x = is_float ? ((float *)ab->mData)[i]
-                               : ((int16_t *)ab->mData)[i] / 32768.0f;
+            float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
             float a = x < 0 ? -x : x;
             if (a > pk) pk = a;
         }
@@ -299,12 +278,11 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     float rate = (float)g_fmt.mSampleRate;
     if (rate < 8000.0f) rate = 48000.0f;
 
-    // ----- بارامترات الصدى من "المدى" -----
     float r = (float)g_range / 100.0f;
-    float rep_fb    = 0.40f + 0.47f * r;      // كم مرة يتكرر
-    float rep_delay = 0.28f + 0.22f * r;      // ثواني بين التكرارات
-    float cave_fb   = 0.84f + 0.12f * r;      // طول ذيل الكهف
-    float cave_size = 1.4f + 0.8f * r;        // حجم الكهف
+    float rep_fb    = 0.45f + 0.45f * r;
+    float rep_delay = 0.30f + 0.25f * r;
+    float cave_fb   = 0.88f + 0.10f * r;
+    float cave_size = 1.6f + 0.9f * r;
     float wet_gain  = ((float)lvl / 100.0f) * ((float)g_boost / 100.0f);
 
     float gain = (float)gn / 100.0f;
@@ -335,8 +313,7 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
     UInt32 ch = 0;
     size_t fi = 0;
     for (size_t i = 0; i < n; i++) {
-        float x = is_float ? ((float *)ab->mData)[i]
-                           : ((int16_t *)ab->mData)[i] / 32768.0f;
+        float x = is_float ? ((float *)ab->mData)[i] : ((int16_t *)ab->mData)[i] / 32768.0f;
         float y = mute ? 0.0f : x;
 
         if (ps_on) y = ps_process(ps, y, ratio);
@@ -353,8 +330,8 @@ static void process_buffer(int idx, AudioBuffer *ab, const float *mus, UInt32 mu
             if (rep) {
                 float d = line[p];
                 line[p] = y + rep_fb * d;
-                wet += d * REP_GAIN;
-                rin = y + 0.6f * d;            // الكهف يسمع التكرارات كمان
+                wet += d * 1.3f;
+                rin = y + 0.65f * d;
                 if (++p >= D) p = 0;
             }
             if (cave) {
@@ -383,7 +360,7 @@ static OSStatus my_render(AudioUnit unit, AudioUnitRenderActionFlags *flags,
                           const AudioTimeStamp *ts, UInt32 bus,
                           UInt32 frames, AudioBufferList *io) {
     OSStatus st = orig_render(unit, flags, ts, bus, frames, io);
-    if (st != noErr || bus != 1 || io == NULL) return st;   // bus 1 = المايك
+    if (st != noErr || bus != 1 || io == NULL) return st;
 
     if (unit != g_unit || !g_have_fmt) {
         UInt32 sz = sizeof(g_fmt);
