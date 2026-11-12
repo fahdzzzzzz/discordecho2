@@ -1,4 +1,4 @@
-// 🎛️ DiscordEchoUI: واجهة كرت الصوت الفضي Creative EAX (بدون زر سماع الصوت)
+// 🎛️ DiscordEchoUI: واجهة كرت الفضي المحدثة مع تردد الهمس ومودات الكرت الفضي
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -7,6 +7,7 @@
 extern void DiscordEcho_SetLevel(int v);
 extern void DiscordEcho_SetEchoBoost(int v);
 extern void DiscordEcho_SetRange(int v);
+extern void DiscordEcho_SetWhisperFreq(int v);
 extern void DiscordEcho_SetEAXMode(int on);
 extern void DiscordEcho_SetGain(int v);
 extern void DiscordEcho_SetPitch(int v);
@@ -26,6 +27,7 @@ extern float DiscordEcho_MusicDuration(void);
 static NSString *const kLevelKey = @"DiscordEchoLevel";
 static NSString *const kBoostKey = @"DiscordEchoBoost";
 static NSString *const kRangeKey = @"DiscordEchoRange";
+static NSString *const kWFreqKey = @"DiscordEchoWFreq";
 static NSString *const kEAXKey   = @"DiscordEchoEAX";
 static NSString *const kGainKey  = @"DiscordEchoGain";
 static NSString *const kPitchKey = @"DiscordEchoPitch";
@@ -35,7 +37,7 @@ static NSString *const kMusicLoopKey = @"DiscordEchoMusicLoop";
 static NSString *const kMuteKey  = @"DiscordEchoVoiceMute";
 
 static const CGFloat kPanelW = 320;
-static const CGFloat kPanelH = 410;
+static const CGFloat kPanelH = 460;
 static const CGFloat kTabTop = 56;
 
 static int EchoInt(NSString *key, int def) {
@@ -145,9 +147,11 @@ static NSString *EchoTime(float s) {
 @property (nonatomic, strong) UILabel *echoLabel;
 @property (nonatomic, strong) UILabel *boostLabel;
 @property (nonatomic, strong) UILabel *rangeLabel;
+@property (nonatomic, strong) UILabel *wFreqLabel;
 @property (nonatomic, strong) UISlider *echoSlider;
 @property (nonatomic, strong) UISlider *boostSlider;
 @property (nonatomic, strong) UISlider *rangeSlider;
+@property (nonatomic, strong) UISlider *wFreqSlider;
 @property (nonatomic, strong) UILabel *pitchLabel;
 @property (nonatomic, strong) UISlider *pitchSlider;
 @property (nonatomic) BOOL robot;
@@ -181,7 +185,7 @@ static NSString *EchoTime(float s) {
     b.tag = tag;
     [b setTitle:title forState:UIControlStateNormal];
     [b setTitleColor:[UIColor colorWithRed:0.05 green:0.05 blue:0.07 alpha:1.0] forState:UIControlStateNormal];
-    b.titleLabel.font = [UIFont boldSystemFontOfSize:13];
+    b.titleLabel.font = [UIFont boldSystemFontOfSize:12];
     b.backgroundColor = [UIColor colorWithRed:0.78 green:0.80 blue:0.83 alpha:1.0];
     b.layer.cornerRadius = 8;
     b.layer.borderWidth = 1.0;
@@ -225,6 +229,7 @@ static NSString *EchoTime(float s) {
     int level = EchoInt(kLevelKey, 60);
     int boost = EchoInt(kBoostKey, 150);
     int range = EchoInt(kRangeKey, 70);
+    int wfreq = EchoInt(kWFreqKey, 50);
     int eax   = EchoInt(kEAXKey, 1);
     int gain  = EchoInt(kGainKey, 100);
     int pitch = EchoInt(kPitchKey, 0);
@@ -278,26 +283,41 @@ static NSString *EchoTime(float s) {
 
     CGFloat w = kPanelW - 28;
 
-    [self addToggleTo:tabEcho title:@"✨ Creative EAX Whisper 3D" x:14 y:4 width:w on:eax != 0 action:@selector(eaxToggled:)];
+    [self addToggleTo:tabEcho title:@"✨ Creative EAX Whisper 3D" x:14 y:2 width:w on:eax != 0 action:@selector(eaxToggled:)];
 
-    self.echoLabel = [self makeLabelAt:CGRectMake(14, 42, w, 22) size:14 bold:YES alpha:0.95];
+    self.echoLabel = [self makeLabelAt:CGRectMake(14, 36, w, 20) size:12.5 bold:YES alpha:0.95];
     [tabEcho addSubview:self.echoLabel];
-    self.echoSlider = [self makeSliderAt:CGRectMake(14, 66, w, 28) min:0 max:100 value:level action:@selector(echoChanged:)];
+    self.echoSlider = [self makeSliderAt:CGRectMake(14, 56, w, 24) min:0 max:100 value:level action:@selector(echoChanged:)];
     [tabEcho addSubview:self.echoSlider];
 
-    self.boostLabel = [self makeLabelAt:CGRectMake(14, 100, w, 22) size:14 bold:YES alpha:0.95];
+    self.boostLabel = [self makeLabelAt:CGRectMake(14, 82, w, 20) size:12.5 bold:YES alpha:0.95];
     [tabEcho addSubview:self.boostLabel];
-    self.boostSlider = [self makeSliderAt:CGRectMake(14, 124, w, 28) min:100 max:400 value:boost action:@selector(boostChanged:)];
+    self.boostSlider = [self makeSliderAt:CGRectMake(14, 102, w, 24) min:100 max:400 value:boost action:@selector(boostChanged:)];
     [tabEcho addSubview:self.boostSlider];
 
-    self.rangeLabel = [self makeLabelAt:CGRectMake(14, 158, w, 22) size:14 bold:YES alpha:0.95];
+    self.rangeLabel = [self makeLabelAt:CGRectMake(14, 128, w, 20) size:12.5 bold:YES alpha:0.95];
     [tabEcho addSubview:self.rangeLabel];
-    self.rangeSlider = [self makeSliderAt:CGRectMake(14, 182, w, 28) min:0 max:100 value:range action:@selector(rangeChanged:)];
+    self.rangeSlider = [self makeSliderAt:CGRectMake(14, 148, w, 24) min:0 max:100 value:range action:@selector(rangeChanged:)];
     [tabEcho addSubview:self.rangeSlider];
 
-    UILabel *echoHint = [self makeLabelAt:CGRectMake(14, 218, w, 65) size:11.5 bold:NO alpha:0.65];
-    echoHint.text = @"تأثير الوسوسة العشوائية يدمج همساً ناعماً يكسر التكرار الميكانيكي تماماً ويمنحك أجواء استوديو كريتف الفاخرة.";
-    [tabEcho addSubview:echoHint];
+    self.wFreqLabel = [self makeLabelAt:CGRectMake(14, 174, w, 20) size:12.5 bold:YES alpha:0.95];
+    [tabEcho addSubview:self.wFreqLabel];
+    self.wFreqSlider = [self makeSliderAt:CGRectMake(14, 194, w, 24) min:0 max:100 value:wfreq action:@selector(wFreqChanged:)];
+    [tabEcho addSubview:self.wFreqSlider];
+
+    // أزرار مودات كرت الفضي (EAX Presets)
+    UILabel *modLbl = [self makeLabelAt:CGRectMake(14, 222, w, 18) size:12 bold:YES alpha:0.8];
+    modLbl.textAlignment = NSTextAlignmentLeft;
+    modLbl.text = @"🎛️ مودات كرت الفضي (Presets):";
+    [tabEcho addSubview:modLbl];
+
+    NSArray *eaxPresets = @[@"كهف مظلم", @"استوديو فاخر", @"مسرح مفتوح", @"غرفة ضيقة"];
+    NSArray *eaxTags    = @[@1, @2, @3, @4];
+    CGFloat e_bw = (w - 9) / 4.0;
+    for (NSInteger i = 0; i < 4; i++) {
+        CGRect f = CGRectMake(14 + i * (e_bw + 3), 244, e_bw, 30);
+        [tabEcho addSubview:[self makeButton:eaxPresets[i] frame:f tag:[eaxTags[i] integerValue] action:@selector(eaxPresetTapped:)]];
+    }
 
     self.pitchLabel = [self makeLabelAt:CGRectMake(14, 4, w, 24) size:14 bold:YES alpha:0.95];
     [tabPitch addSubview:self.pitchLabel];
@@ -364,6 +384,7 @@ static NSString *EchoTime(float s) {
     [self updateEchoLabel:level];
     [self updateBoostLabel:boost];
     [self updateRangeLabel:range];
+    [self updateWFreqLabel:wfreq];
     [self updatePitchLabel];
     [self updateGainLabel:gain];
     [self updateVolLabel:mvol];
@@ -371,6 +392,7 @@ static NSString *EchoTime(float s) {
     DiscordEcho_SetLevel(level);
     DiscordEcho_SetEchoBoost(boost);
     DiscordEcho_SetRange(range);
+    DiscordEcho_SetWhisperFreq(wfreq);
     DiscordEcho_SetEAXMode(eax);
     DiscordEcho_SetGain(gain);
     DiscordEcho_SetPitch(pitch);
@@ -383,6 +405,7 @@ static NSString *EchoTime(float s) {
 - (void)updateEchoLabel:(int)v { self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"حجم وسوسة EAX: %d", v]; }
 - (void)updateBoostLabel:(int)v { self.boostLabel.text = [NSString stringWithFormat:@"عمق الصدى (Boost): %d%%", v]; }
 - (void)updateRangeLabel:(int)v { self.rangeLabel.text = [NSString stringWithFormat:@"مساحة البُعد (3D): %d", v]; }
+- (void)updateWFreqLabel:(int)v { self.wFreqLabel.text = [NSString stringWithFormat:@"تردد الهمس: %d", v]; }
 - (void)updatePitchLabel {
     int st = (int)lroundf(self.pitchSlider.value);
     NSString *t = (st == 0) ? @"النبرة: عادية" : [NSString stringWithFormat:@"النبرة: %+d نغمة", st];
@@ -405,6 +428,21 @@ static NSString *EchoTime(float s) {
 - (void)echoChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetLevel(v); [self saveInt:v key:kLevelKey]; [self updateEchoLabel:v]; }
 - (void)boostChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetEchoBoost(v); [self saveInt:v key:kBoostKey]; [self updateBoostLabel:v]; }
 - (void)rangeChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetRange(v); [self saveInt:v key:kRangeKey]; [self updateRangeLabel:v]; }
+- (void)wFreqChanged:(UISlider *)s { int v = (int)lroundf(s.value); DiscordEcho_SetWhisperFreq(v); [self saveInt:v key:kWFreqKey]; [self updateWFreqLabel:v]; }
+
+- (void)eaxPresetTapped:(UIButton *)b {
+    // تطبيق مودات الكرت الفضي الجاهزة
+    int lvl = 60, bst = 150, rng = 70, wf = 50;
+    if (b.tag == 1) { lvl = 85; bst = 250; rng = 90; wf = 80; } // كهف مظلم عميق
+    else if (b.tag == 2) { lvl = 50; bst = 130; rng = 60; wf = 40; } // استوديو فاخر
+    else if (b.tag == 3) { lvl = 95; bst = 350; rng = 100; wf = 100; } // مسرح مفتوح
+    else if (b.tag == 4) { lvl = 30; bst = 110; rng = 30; wf = 20; } // غرفة ضيقة
+
+    self.echoSlider.value = lvl; [self echoChanged:self.echoSlider];
+    self.boostSlider.value = bst; [self boostChanged:self.boostSlider];
+    self.rangeSlider.value = rng; [self rangeChanged:self.rangeSlider];
+    self.wFreqSlider.value = wf; [self wFreqChanged:self.wFreqSlider];
+}
 
 - (void)applyPitch:(int)st robot:(BOOL)robot {
     if (st < -12) st = -12; if (st > 12) st = 12;
@@ -574,11 +612,13 @@ static void echo_ui_init(void) {
     DiscordEcho_SetLevel(EchoInt(kLevelKey, 60));
     DiscordEcho_SetEchoBoost(EchoInt(kBoostKey, 150));
     DiscordEcho_SetRange(EchoInt(kRangeKey, 70));
+    DiscordEcho_SetWhisperFreq(EchoInt(kWFreqKey, 50));
     DiscordEcho_SetEAXMode(EchoInt(kEAXKey, 1));
     DiscordEcho_SetGain(EchoInt(kGainKey, 100));
     DiscordEcho_SetPitch(EchoInt(kPitchKey, 0));
     DiscordEcho_SetRobot(EchoInt(kRobotKey, 0));
     DiscordEcho_MusicSetVolume(EchoInt(kMusicVolKey, 100));
+    DiscordEcho_MusicSetLoop(EchoInt(kMusicLoopKey, 0));
     DiscordEcho_MusicSetLoop(EchoInt(kMusicLoopKey, 0));
     DiscordEcho_SetVoiceMute(EchoInt(kMuteKey, 0));
 
