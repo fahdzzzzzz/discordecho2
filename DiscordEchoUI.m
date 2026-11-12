@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 
+// الإعلانات الخارجية لدوال محرك الصوت C
 extern void DiscordEcho_SetEnableEffects(int enabled);
 extern void DiscordEcho_SetEffectsAmount(int amount);
 extern void DiscordEcho_SetPreset(int preset);
@@ -30,7 +31,7 @@ extern float DiscordEcho_GetPeak(void);
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.clearColor;
 
-    // الزر العائم للفتح
+    // 🎛️ الزر العائم الأساسي للفتح
     UIButton *fab = [UIButton buttonWithType:UIButtonTypeCustom];
     fab.frame = CGRectMake(20, 140, 50, 50);
     fab.backgroundColor = [UIColor colorWithRed:0.18 green:0.20 blue:0.25 alpha:0.95];
@@ -39,7 +40,7 @@ extern float DiscordEcho_GetPeak(void);
     [fab addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:fab];
 
-    // اللوحة الرئيسية (EAX Console Style)
+    // 📱 اللوحة الرئيسية (EAX Console Style)
     UIView *panel = [[UIView alloc] initWithFrame:CGRectMake(20, 200, 300, 320)];
     panel.backgroundColor = [UIColor colorWithRed:0.92 green:0.94 blue:0.97 alpha:0.98];
     panel.layer.cornerRadius = 12;
@@ -49,14 +50,14 @@ extern float DiscordEcho_GetPeak(void);
     [self.view addSubview:panel];
     self.panel = panel;
 
-    // عنوان لوحة التحكم
+    // 🏷️ عنوان لوحة التحكم
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(14, 12, 200, 24)];
     title.text = @"Creative EAX Console";
     title.font = [UIFont boldSystemFontOfSize:14];
     title.textColor = [UIColor colorWithRed:0.2 green:0.2 blue:0.25 alpha:1.0];
     [panel addSubview:title];
 
-    // زر إغلاق (✕)
+    // ✕ زر إغلاق اللوحة
     UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     closeBtn.frame = CGRectMake(260, 10, 30, 30);
     [closeBtn setTitle:@"✕" forState:UIControlStateNormal];
@@ -65,7 +66,7 @@ extern float DiscordEcho_GetPeak(void);
     [closeBtn addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
     [panel addSubview:closeBtn];
 
-    // مفتاح تفعيل المؤثرات Enable Audio Effects
+    // ⚙️ مفتاح تفعيل المؤثرات
     UILabel *lblSwitch = [[UILabel alloc] initWithFrame:CGRectMake(14, 50, 180, 24)];
     lblSwitch.text = @"Enable Audio Effects";
     lblSwitch.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
@@ -77,7 +78,7 @@ extern float DiscordEcho_GetPeak(void);
     [panel addSubview:sw];
     self.effectsSwitch = sw;
 
-    // اختيار البيئة (Presets)
+    // 🏔️ اختيار البيئة (Presets)
     UILabel *lblPreset = [[UILabel alloc] initWithFrame:CGRectMake(14, 95, 200, 20)];
     lblPreset.text = @"Active Preset (Environment)";
     lblPreset.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
@@ -91,7 +92,7 @@ extern float DiscordEcho_GetPeak(void);
     [panel addSubview:presetSeg];
     self.presetControl = presetSeg;
 
-    // شريط تمرير شدة التأثير Effects Amount (0 - 100)
+    // 🎚️ شريط تمرير شدة التأثير
     UILabel *lblAmount = [[UILabel alloc] initWithFrame:CGRectMake(14, 175, 150, 20)];
     lblAmount.text = @"Effects Amount : 50";
     lblAmount.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
@@ -132,7 +133,7 @@ static void echo_setup_window(void) {
     if (gWin) return;
     UIWindowScene *targetScene = nil;
     for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
-        if ([s isKindOfClass:UIWindowScene.class] && s.activationState == UISceneActivationStateForegroundActive) {
+        if ([s isKindOfClass:[UIWindowScene class]] && s.activationState == UISceneActivationStateForegroundActive) {
             targetScene = (UIWindowScene *)s;
             break;
         }
