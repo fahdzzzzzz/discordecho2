@@ -1,6 +1,4 @@
-// DiscordEchoUI: قائمة عائمة بأربع تبويبات: الصدى، النبرة، المضخّم، الأغاني
-// زر 🎙 تسحبه في الشاشة، والضغط عليه يفتح القائمة.
-
+// DiscordEchoUI: قائمة عائمة بأربع تبويبات مع زر EAX الموحد والتحكم الفوري
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -9,8 +7,7 @@
 extern void DiscordEcho_SetLevel(int v);
 extern void DiscordEcho_SetEchoBoost(int v);
 extern void DiscordEcho_SetRange(int v);
-extern void DiscordEcho_SetCave(int on);
-extern void DiscordEcho_SetRepeat(int on);
+extern void DiscordEcho_SetEAXMode(int on);
 extern void DiscordEcho_SetGain(int v);
 extern void DiscordEcho_SetPitch(int v);
 extern void DiscordEcho_SetRobot(int on);
@@ -29,8 +26,7 @@ extern float DiscordEcho_MusicDuration(void);
 static NSString *const kLevelKey = @"DiscordEchoLevel";
 static NSString *const kBoostKey = @"DiscordEchoBoost";
 static NSString *const kRangeKey = @"DiscordEchoRange";
-static NSString *const kCaveKey  = @"DiscordEchoCave";
-static NSString *const kRepeatKey = @"DiscordEchoRepeat";
+static NSString *const kEAXKey   = @"DiscordEchoEAX";
 static NSString *const kGainKey  = @"DiscordEchoGain";
 static NSString *const kPitchKey = @"DiscordEchoPitch";
 static NSString *const kRobotKey = @"DiscordEchoRobot";
@@ -50,7 +46,7 @@ static int EchoInt(NSString *key, int def) {
 #pragma mark - فك ترميز الأغنية إلى عينات أحادية 48kHz
 
 static const double kTargetRate = 48000.0;
-static const size_t kMaxSamples = 48000 * 60 * 8;   // أقصى 8 دقائق
+static const size_t kMaxSamples = 48000 * 60 * 8;
 
 static float *EchoDecodeFile(NSURL *url, size_t *outCount, BOOL *truncated) {
     *outCount = 0;
@@ -108,7 +104,7 @@ static float *EchoDecodeFile(NSURL *url, size_t *outCount, BOOL *truncated) {
         for (AVAudioFrameCount i = 0; i < got && n < cap; i++) {
             float s = 0;
             for (AVAudioChannelCount c = 0; c < chans; c++) s += chData[c][i];
-            out[n++] = s / (float)chans;      // دمج القنوات إلى أحادي
+            out[n++] = s / (float)chans;
         }
         if (got == 0) finished = YES;
     }
@@ -171,8 +167,6 @@ static NSString *EchoTime(float s) {
 
 @implementation EchoController
 
-#pragma mark - عناصر مساعدة
-
 - (UILabel *)makeLabelAt:(CGRect)frame size:(CGFloat)size bold:(BOOL)bold alpha:(CGFloat)alpha {
     UILabel *l = [[UILabel alloc] initWithFrame:frame];
     l.textAlignment = NSTextAlignmentCenter;
@@ -221,17 +215,14 @@ static NSString *EchoTime(float s) {
     return sw;
 }
 
-#pragma mark - بناء الواجهة
-
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.clearColor;
 
-    int level = EchoInt(kLevelKey, 50);
-    int boost = EchoInt(kBoostKey, 100);
-    int range = EchoInt(kRangeKey, 60);
-    int cave  = EchoInt(kCaveKey, 1);
-    int rep   = EchoInt(kRepeatKey, 1);
+    int level = EchoInt(kLevelKey, 60);
+    int boost = EchoInt(kBoostKey, 150);
+    int range = EchoInt(kRangeKey, 70);
+    int eax   = EchoInt(kEAXKey, 1);
     int gain  = EchoInt(kGainKey, 100);
     int pitch = EchoInt(kPitchKey, 0);
     self.robot = EchoInt(kRobotKey, 0) != 0;
@@ -284,9 +275,8 @@ static NSString *EchoTime(float s) {
 
     CGFloat w = kPanelW - 32;
 
-    // ================= تبويب الصدى =================
-    [self addToggleTo:tabEcho title:@"كهف 👻" x:16 y:4 width:136 on:cave != 0 action:@selector(caveToggled:)];
-    [self addToggleTo:tabEcho title:@"تكرار 🔁" x:16 + 152 y:4 width:136 on:rep != 0 action:@selector(repeatToggled:)];
+    // ================= تبويب الصدى (مزود بزر EAX الموحد) =================
+    [self addToggleTo:tabEcho title:@"موضة كريتف EAX ⚡" x:16 y:4 width:w on:eax != 0 action:@selector(eaxToggled:)];
 
     self.echoLabel = [self makeLabelAt:CGRectMake(16, 44, w, 24) size:16 bold:YES alpha:1];
     [tabEcho addSubview:self.echoLabel];
@@ -304,7 +294,7 @@ static NSString *EchoTime(float s) {
     [tabEcho addSubview:self.rangeSlider];
 
     UILabel *echoHint = [self makeLabelAt:CGRectMake(16, 228, w, 60) size:12 bold:NO alpha:0.55];
-    echoHint.text = @"كهف: ذيل ممتد · تكرار: صوتك يعيد نفسه (الو.. الو.. الو)\nمضخّم الصدى يرفع الصدى بس، والمدى يطوّل التكرار والذيل.\nشغّل واحد منهم على الأقل وإلا ما يطلع صدى.";
+    echoHint.text = @"زر EAX يدمج صدى الكهف والتكرار معاً بنغمة كريتف الصافية.\nالشدة والمدى تتفاعل فوراً وبدون أي تأخير (Low-Latency).";
     [tabEcho addSubview:echoHint];
 
     // ================= تبويب النبرة =================
@@ -350,7 +340,7 @@ static NSString *EchoTime(float s) {
     self.meter = meter;
 
     UILabel *ampHint = [self makeLabelAt:CGRectMake(16, 160, w, 60) size:12 bold:NO alpha:0.55];
-    ampHint.text = @"تكلّم وشوف الشريط. المضخّم يرفع صوتك لين ×8 مع حد ناعم يمنع التقطع.\nلو الشريط صار أحمر دايم، خفّض التضخيم.";
+    ampHint.text = @"تكلّم وشوف الشريط. المضخّم يرفع صوتك لين ×8 مع حد ناعم يمنع التقطع.";
     [tabAmp addSubview:ampHint];
 
     // ================= تبويب الأغاني =================
@@ -398,8 +388,7 @@ static NSString *EchoTime(float s) {
     DiscordEcho_SetLevel(level);
     DiscordEcho_SetEchoBoost(boost);
     DiscordEcho_SetRange(range);
-    DiscordEcho_SetCave(cave);
-    DiscordEcho_SetRepeat(rep);
+    DiscordEcho_SetEAXMode(eax);
     DiscordEcho_SetGain(gain);
     DiscordEcho_SetPitch(pitch);
     DiscordEcho_SetRobot(self.robot ? 1 : 0);
@@ -407,8 +396,6 @@ static NSString *EchoTime(float s) {
     DiscordEcho_MusicSetLoop(mloop);
     DiscordEcho_SetVoiceMute(mute);
 }
-
-#pragma mark - تحديث النصوص
 
 - (void)updateEchoLabel:(int)v {
     self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"شدة الصدى: %d", v];
@@ -432,8 +419,6 @@ static NSString *EchoTime(float s) {
     self.volLabel.text = [NSString stringWithFormat:@"مستوى الأغنية: %d%%", v];
 }
 
-#pragma mark - الأحداث
-
 - (void)tabChanged:(UISegmentedControl *)sender {
     for (NSUInteger i = 0; i < self.tabViews.count; i++)
         self.tabViews[i].hidden = ((NSInteger)i != sender.selectedSegmentIndex);
@@ -443,9 +428,7 @@ static NSString *EchoTime(float s) {
     [[NSUserDefaults standardUserDefaults] setInteger:v forKey:k];
 }
 
-// ----- الصدى -----
-- (void)caveToggled:(UISwitch *)s { DiscordEcho_SetCave(s.on ? 1 : 0); [self saveInt:s.on key:kCaveKey]; }
-- (void)repeatToggled:(UISwitch *)s { DiscordEcho_SetRepeat(s.on ? 1 : 0); [self saveInt:s.on key:kRepeatKey]; }
+- (void)eaxToggled:(UISwitch *)s { DiscordEcho_SetEAXMode(s.on ? 1 : 0); [self saveInt:s.on ? 1 : 0 key:kEAXKey]; }
 
 - (void)echoChanged:(UISlider *)s {
     int v = (int)lroundf(s.value);
@@ -460,7 +443,6 @@ static NSString *EchoTime(float s) {
     DiscordEcho_SetRange(v); [self saveInt:v key:kRangeKey]; [self updateRangeLabel:v];
 }
 
-// ----- النبرة -----
 - (void)applyPitch:(int)st robot:(BOOL)robot {
     if (st < -12) st = -12;
     if (st > 12) st = 12;
@@ -475,19 +457,18 @@ static NSString *EchoTime(float s) {
 - (void)pitchChanged:(UISlider *)s { [self applyPitch:(int)lroundf(s.value) robot:self.robot]; }
 - (void)presetTapped:(UIButton *)b {
     switch (b.tag) {
-        case 0: [self applyPitch:0  robot:NO];  break;   // عادي
-        case 1: [self applyPitch:5  robot:NO];  break;   // بنت
-        case 2: [self applyPitch:-4 robot:NO];  break;   // رجل
-        case 3: [self applyPitch:-9 robot:NO];  break;   // وحش
-        case 4: [self applyPitch:0  robot:YES]; break;   // روبوت
-        default: {                                         // عشوائي
+        case 0: [self applyPitch:0  robot:NO];  break;
+        case 1: [self applyPitch:5  robot:NO];  break;
+        case 2: [self applyPitch:-4 robot:NO];  break;
+        case 3: [self applyPitch:-9 robot:NO];  break;
+        case 4: [self applyPitch:0  robot:YES]; break;
+        default: {
             int st = (int)arc4random_uniform(21) - 10;
             [self applyPitch:st robot:(arc4random_uniform(4) == 0)];
         }
     }
 }
 
-// ----- المضخّم -----
 - (void)gainChanged:(UISlider *)s {
     int v = (int)lroundf(s.value);
     DiscordEcho_SetGain(v); [self saveInt:v key:kGainKey]; [self updateGainLabel:v];
@@ -497,7 +478,6 @@ static NSString *EchoTime(float s) {
     [self gainChanged:self.gainSlider];
 }
 
-// ----- الأغاني -----
 - (void)chooseSong {
     UIDocumentPickerViewController *p =
         [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.audio"]
@@ -567,8 +547,6 @@ static NSString *EchoTime(float s) {
 - (void)loopToggled:(UISwitch *)s { DiscordEcho_MusicSetLoop(s.on ? 1 : 0); [self saveInt:s.on key:kMusicLoopKey]; }
 - (void)muteToggled:(UISwitch *)s { DiscordEcho_SetVoiceMute(s.on ? 1 : 0); [self saveInt:s.on key:kMuteKey]; }
 
-#pragma mark - مؤقت (مقياس المايك + تقدّم الأغنية)
-
 - (void)startTimer {
     if (self.timer) return;
     __weak EchoController *ws = self;
@@ -593,8 +571,6 @@ static NSString *EchoTime(float s) {
     [self.timer invalidate];
     self.timer = nil;
 }
-
-#pragma mark - تحريك القائمة
 
 - (void)togglePanel {
     self.panel.hidden = !self.panel.hidden;
@@ -643,8 +619,6 @@ static NSString *EchoTime(float s) {
 
 @end
 
-#pragma mark - تشغيل النافذة فوق ديسكورد
-
 static EchoWindow *gWin;
 
 static void echo_setup_window(void) {
@@ -653,8 +627,16 @@ static void echo_setup_window(void) {
     for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
         if ([s isKindOfClass:UIWindowScene.class] &&
             s.activationState == UISceneActivationStateForegroundActive) {
-            scene = (UIWindowScene *)s;
+            scene = (UISceneScene *)s; // ملاحظة: تعامل آمن مع الـ scene
             break;
+        }
+    }
+    if (!scene) {
+        for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+            if ([s isKindOfClass:UIWindowScene.class]) {
+                scene = (UIScene *)s;
+                break;
+            }
         }
     }
     if (!scene) return;
@@ -667,11 +649,10 @@ static void echo_setup_window(void) {
 
 __attribute__((constructor))
 static void echo_ui_init(void) {
-    DiscordEcho_SetLevel(EchoInt(kLevelKey, 50));
-    DiscordEcho_SetEchoBoost(EchoInt(kBoostKey, 100));
-    DiscordEcho_SetRange(EchoInt(kRangeKey, 60));
-    DiscordEcho_SetCave(EchoInt(kCaveKey, 1));
-    DiscordEcho_SetRepeat(EchoInt(kRepeatKey, 1));
+    DiscordEcho_SetLevel(EchoInt(kLevelKey, 60));
+    DiscordEcho_SetEchoBoost(EchoInt(kBoostKey, 150));
+    DiscordEcho_SetRange(EchoInt(kRangeKey, 70));
+    DiscordEcho_SetEAXMode(EchoInt(kEAXKey, 1));
     DiscordEcho_SetGain(EchoInt(kGainKey, 100));
     DiscordEcho_SetPitch(EchoInt(kPitchKey, 0));
     DiscordEcho_SetRobot(EchoInt(kRobotKey, 0));
