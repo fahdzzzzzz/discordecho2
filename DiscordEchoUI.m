@@ -256,7 +256,7 @@ static NSString *EchoTime(float s) {
     [self.view addSubview:panel];
     self.panel = panel;
 
-    UISegmentedControl *tabs = [[UISegmentedControl alloc] initWithItems:@[@"EAX صدى", @"🎙️ نبرة", @"🎚️ مضخّم", @"🎵 أغاني"]];
+    UISegmentedControl *tabs = [[UISegmentedControl alloc] initWithItems:@[@"EAX وسوسة", @"🎙️ نبرة", @"🎚️ مضخّم", @"🎵 أغاني"]];
     tabs.frame = CGRectMake(12, 10, kPanelW - 24, 34);
     tabs.selectedSegmentIndex = 0;
     tabs.selectedSegmentTintColor = [UIColor colorWithRed:0.18 green:0.50 blue:0.82 alpha:1.0];
@@ -278,7 +278,7 @@ static NSString *EchoTime(float s) {
 
     CGFloat w = kPanelW - 28;
 
-    [self addToggleTo:tabEcho title:@"✨ Creative EAX 3D Studio" x:14 y:4 width:w on:eax != 0 action:@selector(eaxToggled:)];
+    [self addToggleTo:tabEcho title:@"✨ Creative EAX Whisper 3D" x:14 y:4 width:w on:eax != 0 action:@selector(eaxToggled:)];
 
     self.echoLabel = [self makeLabelAt:CGRectMake(14, 42, w, 22) size:14 bold:YES alpha:0.95];
     [tabEcho addSubview:self.echoLabel];
@@ -296,7 +296,7 @@ static NSString *EchoTime(float s) {
     [tabEcho addSubview:self.rangeSlider];
 
     UILabel *echoHint = [self makeLabelAt:CGRectMake(14, 218, w, 65) size:11.5 bold:NO alpha:0.65];
-    echoHint.text = @"محاكاة EAX الخالصة تلغي التكرار الميكانيكي وتمنحك هالة صوتية فضائية ناعمة متصلة بالكامل بدون أي تأخير.";
+    echoHint.text = @"تأثير الوسوسة العشوائية يدمج همساً ناعماً يكسر التكرار الميكانيكي تماماً ويمنحك أجواء استوديو كريتف الفاخرة.";
     [tabEcho addSubview:echoHint];
 
     self.pitchLabel = [self makeLabelAt:CGRectMake(14, 4, w, 24) size:14 bold:YES alpha:0.95];
@@ -373,8 +373,8 @@ static NSString *EchoTime(float s) {
     DiscordEcho_SetVoiceMute(mute);
 }
 
-- (void)updateEchoLabel:(int)v { self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"حجم صدى EAX: %d", v]; }
-- (void)updateBoostLabel:(int)v { self.boostLabel.text = [NSString stringWithFormat:@"عمق الكهف (Boost): %d%%", v]; }
+- (void)updateEchoLabel:(int)v { self.echoLabel.text = (v == 0) ? @"الصدى: متوقف" : [NSString stringWithFormat:@"حجم وسوسة EAX: %d", v]; }
+- (void)updateBoostLabel:(int)v { self.boostLabel.text = [NSString stringWithFormat:@"عمق الصدى (Boost): %d%%", v]; }
 - (void)updateRangeLabel:(int)v { self.rangeLabel.text = [NSString stringWithFormat:@"مساحة البُعد (3D): %d", v]; }
 - (void)updatePitchLabel {
     int st = (int)lroundf(self.pitchSlider.value);
@@ -549,7 +549,7 @@ static void echo_setup_window(void) {
     if (!targetScene) {
         for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
             if ([s isKindOfClass:UIWindowScene.class]) {
-                targetScene = (UIWindowScene *)s;
+                targetScene = (UIScene *)s;
                 break;
             }
         }
