@@ -1,4 +1,4 @@
-// 🎛️ DiscordEchoUI: واجهة التحكم المطورة لصدى Creative EAX وتردد الهمس
+// 🎛️ DiscordEchoUI: واجهة التحكم المطورة لصدى Creative EAX
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #include <math.h>
@@ -76,7 +76,7 @@ static int EchoInt(NSString *key, int def) {
 
     // شريط مستوى الصدى (0 إلى 100)
     UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(14, 40, kPanelW - 28, 24)];
-    lbl.text = @"مستوى صدى الـ EAX (0 - 100)";
+    lbl.text = [NSString stringWithFormat:@"مستوى صدى الـ EAX: %d", level];
     lbl.font = [UIFont boldSystemFontOfSize:14];
     [panel addSubview:lbl];
     self.echoLabel = lbl;
